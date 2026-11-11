@@ -240,6 +240,10 @@ func NewEditorWithTUI(ui TUI, theme EditorTheme, options EditorOptions) *Editor 
 }
 
 func (e *Editor) requestRender() {
+	// Pi's tui.requestRender renders the whole tree again, so a CustomEditor subclass shows its base's asynchronous change (an autocomplete menu that opened or closed after the key that asked for it) through its own render. A delegated component renders in its extension's process, so it is asked to render again. A change inside its own base call needs no notice: the component renders after that call.
+	if e.remote != nil && e.remote.delegated && !e.inBase {
+		e.remote.remote.StateChanged()
+	}
 	if e.ui != nil {
 		e.ui.RequestRender()
 	}
@@ -1516,6 +1520,7 @@ func (e *Editor) refreshAutocomplete() {
 		e.autocompleteCursor = bestAutocompleteMatchIndex(res.Items, res.Prefix)
 		e.autocompleteForced = force
 		e.Invalidate()
+		e.requestRender()
 	}
 	// Upstream awaits even local suggestions. Paint the input before a popup
 	// can grow the viewport, and reject results superseded by submit/cancel.
@@ -1575,6 +1580,7 @@ func (e *Editor) kickFileAutocomplete(baseRes *AutocompleteSuggestions, fileTask
 				e.autocompleteCursor = 0
 			}
 			e.Invalidate()
+			e.requestRender()
 		}
 		if e.scheduleAsyncApply != nil {
 			e.scheduleAsyncApply(apply)

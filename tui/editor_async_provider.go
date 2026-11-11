@@ -100,6 +100,7 @@ func (e *Editor) acceptAsyncAutocomplete(done func(bool)) {
 			}
 			e.applyAutocompleteState(result, line, col)
 			e.Invalidate()
+			e.requestRender()
 			if e.OnChange != nil {
 				e.OnChange(e.Text())
 			}

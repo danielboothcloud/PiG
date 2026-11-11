@@ -344,11 +344,12 @@ func (b *UIBridge) handleAutocompleteCurrent(ctx context.Context, name string, o
 }
 
 // SyncAutocomplete gives an installed subprocess editor the same provider as the default editor. It runs off the UI loop and awaits the editor's synchronous setter.
+// Pi's setCustomEditorComponent passes the provider to the component's setAutocompleteProvider. A delegated component (a CustomEditor subclass in a Go, Rust, Python or Lisp SDK) inherits that setter from its base, the host's own editor, which the rebuild has already given the provider, so it gets no notice: those SDKs have no editor-side provider, and a notice they cannot answer failed the rebuild as an uncaught exception.
 func (b *UIBridge) SyncAutocomplete(ctx context.Context, provider *extension.AutocompleteProvider) error {
 	b.mu.RLock()
 	editor := b.editor
 	b.mu.RUnlock()
-	if editor == nil || !editor.live() {
+	if editor == nil || editor.delegated || !editor.live() {
 		return nil
 	}
 	desc := b.autocompleteReference(editor.ext, editor.conn, provider)

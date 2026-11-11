@@ -53,7 +53,8 @@ func (e *Editor) FlushAutocomplete() {
 		return
 	}
 	e.nativeAutocomplete = nil
-	if e.forwards() || pending.request != e.autocompleteRequestID || e.cursor != pending.cursor || !slices.Equal(e.lines, pending.lines) {
+	// A delegated component's base is this editor's own editing, which the keys reach through AsBase; its request runs as the base's would.
+	if (e.forwards() && !e.remote.delegated) || pending.request != e.autocompleteRequestID || e.cursor != pending.cursor || !slices.Equal(e.lines, pending.lines) {
 		return
 	}
 	if e.autocompleteLifetime != nil && e.autocompleteLifetime.Err() != nil {
