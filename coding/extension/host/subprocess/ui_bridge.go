@@ -1404,6 +1404,9 @@ func (b *UIBridge) handleCall(ctx context.Context, extName string, owner *Conn, 
 			beller.Bell()
 		}
 		return &CallResultPayload{}, nil
+	// pig additive (D19): a Pi extension hands the terminal to a program with ctx.ui.custom, tui.stop() and a spawn with inherited stdio, none of which a subprocess extension can reach; its own stdio is the host wire.
+	case CallUIRunForeground:
+		return b.handleRunForeground(ctx, ui, call.Args)
 
 	// ── Category 2: User Interaction (blocking) ──────────────────────────
 	case "ui.select":
@@ -3728,6 +3731,27 @@ func (b *UIBridge) hasExecAction() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.actions != nil && (b.actions.ExecContext != nil || b.actions.Exec != nil)
+}
+
+func (b *UIBridge) handleRunForeground(ctx context.Context, ui extension.UIContext, args json.RawMessage) (*CallResultPayload, error) {
+	extension.CallInitiated(ctx)
+	var p extension.ForegroundCommand
+	if err := json.Unmarshal(args, &p); err != nil {
+		return nil, fmt.Errorf("parse runForeground args: %w", err)
+	}
+	if p.Command == "" {
+		return nil, errors.New("runForeground: command must not be empty")
+	}
+	runner, ok := ui.(extension.ForegroundRunner)
+	if !ok {
+		return nil, extension.ErrNoForegroundTerminal
+	}
+	res, err := runner.RunForeground(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	result, _ := json.Marshal(res)
+	return &CallResultPayload{Result: result}, nil
 }
 
 func (b *UIBridge) handleExec(ctx context.Context, actions *HostCallbacks, args json.RawMessage) (*CallResultPayload, error) {

@@ -867,6 +867,8 @@ const (
 	CallUISetLogin = "ui.setLogin"
 	// CallUIBell rings the terminal bell of the interactive terminal; it does nothing without one.
 	CallUIBell = "ui.bell"
+	// CallUIRunForeground (ext→host) runs an extension.ForegroundCommand with the interactive terminal as its stdio and returns an extension.ForegroundResult once the TUI is back. It fails where there is no terminal UI.
+	CallUIRunForeground = "ui.runForeground"
 	// pig divergence (D2): an extension's sprite joins /sprite.
 	CallUIRegisterSprite = "ui.registerSprite"
 	NotifyUICustomInput  = "ui.custom.input"

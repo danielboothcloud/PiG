@@ -34,6 +34,33 @@ func (c Context) OnToolsExpandedChange(handler ToolsExpandedChangeHandler) (func
 	return c.ext.expandedFeed.subscribe(handler), nil
 }
 
+// ForegroundOptions configures [Context.RunForeground]. Cwd empty means the host's working directory. Env entries ("KEY=value") are added to the host's environment.
+type ForegroundOptions struct {
+	Cwd string
+	Env []string
+}
+
+// RunForeground hands the interactive terminal to a program and takes it back: the host stops rendering, restores the terminal from raw mode, runs command with the terminal as its stdin, stdout and stderr, then re-enters raw mode and redraws the whole screen. It returns the program's exit code, or -1 when a signal (a Ctrl+C) ended it. The TUI comes back whether the program succeeded, failed or was interrupted. The call fails at once in print, JSON and RPC modes, where there is no terminal to hand over, and when the program cannot start.
+//
+// A Pi extension does this with ctx.ui.custom, tui.stop(), a spawn with inherited stdio, then tui.start(); a subprocess extension's own stdio is the host wire, so the host runs the program.
+func (c Context) RunForeground(command string, args []string, opts ForegroundOptions) (int, error) {
+	payload := map[string]any{"command": command, "args": args}
+	if opts.Cwd != "" {
+		payload["cwd"] = opts.Cwd
+	}
+	if len(opts.Env) > 0 {
+		payload["env"] = opts.Env
+	}
+	result, err := hostDecoded[struct {
+		ExitCode int    `json:"exitCode"`
+		Signal   string `json:"signal"`
+	}](c, "ui.runForeground", payload)
+	if err != nil {
+		return -1, err
+	}
+	return result.ExitCode, nil
+}
+
 // Bell rings the terminal bell (BEL) of the interactive terminal between frames, the call a Pi extension makes by writing "\x07" to process.stdout. It does nothing where there is no terminal UI: print, JSON and RPC modes. The returned error reports a failure to reach the host only.
 func (c Context) Bell() error {
 	result, err := c.callHost("ui.bell", nil)

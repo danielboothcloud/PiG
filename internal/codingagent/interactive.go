@@ -246,6 +246,8 @@ type InteractiveMode struct {
 	// suspended is true while the session is parked by SIGTSTP. SIGINT is
 	// ignored then, mirroring upstream's ignoreSigint listener.
 	suspended atomic.Bool
+	// foregroundActive is true while an extension's foreground program owns the terminal. SIGINT is ignored then: Ctrl+C reaches the program, which shares the terminal's foreground process group.
+	foregroundActive atomic.Bool
 
 	// Shutdown paths share an emission guard and join in-flight cleanup before owner-loop terminal teardown.
 	signalShutdownDone atomic.Bool

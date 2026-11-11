@@ -15,13 +15,38 @@ func (m *InteractiveMode) openExternalEditor(ctx context.Context) {
 
 // openExternalEditorBuffer hands terminal input and output to the child off the UI loop. Completion returns to the owner loop and only a successful edit replaces the caller's buffer.
 func (m *InteractiveMode) openExternalEditorBuffer(ctx context.Context, command, initial string, apply func(string), report func(message string)) {
-	if m.externalEditorActive {
+	if !m.releaseTerminal() {
 		return
+	}
+	ownerCtx := m.runCtx
+	if ownerCtx == nil {
+		ownerCtx = ctx
+	}
+	m.backgroundTasks.Go(func() {
+		result, runErr := OpenExternalEditor(ctx, initial, command)
+		m.runOnMain(ownerCtx, func() {
+			m.reclaimTerminal(ownerCtx, func() {
+				if runErr == nil && ctx.Err() == nil {
+					apply(result)
+				}
+				var failure *ExternalEditorFailure
+				if errors.As(runErr, &failure) && ctx.Err() == nil && report != nil {
+					report(failure.Message)
+				}
+			})
+		})
+	})
+}
+
+// releaseTerminal runs on the owner loop. It stops rendering and terminal input and restores cooked mode, so a child process can own the terminal. It reports false when the terminal is already handed off.
+func (m *InteractiveMode) releaseTerminal() bool {
+	if m.externalEditorActive {
+		return false
 	}
 	m.externalEditorActive = true
 	if m.surface != nil {
 		// pig additive (D91): the frontend session keeps its frames while
-		// the editor owns the terminal and learns of the handoff.
+		// the child owns the terminal and learns of the handoff.
 		m.surface.Suspend()
 	} else {
 		m.tuiInst.Stop()
@@ -34,49 +59,41 @@ func (m *InteractiveMode) openExternalEditorBuffer(ctx context.Context, command,
 		m.rawRestore = nil
 		m.rawDrain = nil
 	}
-	ownerCtx := m.runCtx
-	if ownerCtx == nil {
-		ownerCtx = ctx
+	return true
+}
+
+// reclaimTerminal runs on the owner loop after releaseTerminal's child exited. It re-enters raw mode, runs settle, redraws the whole screen, and replays input that arrived during the handoff.
+func (m *InteractiveMode) reclaimTerminal(ownerCtx context.Context, settle func()) {
+	m.externalEditorActive = false
+	if ownerCtx.Err() != nil {
+		return
 	}
-	m.backgroundTasks.Go(func() {
-		result, runErr := OpenExternalEditor(ctx, initial, command)
-		m.runOnMain(ownerCtx, func() {
-			m.externalEditorActive = false
-			if ownerCtx.Err() != nil {
-				return
-			}
-			restore, drain, rawErr := tui.EnterRawModeWithDrain()
-			if rawErr != nil {
-				m.exitIfDeadTerminal(rawErr)
-				m.failInputLoop(rawErr)
-				return
-			}
-			m.rawRestore = restore
-			m.rawDrain = drain
-			if runErr == nil && ctx.Err() == nil {
-				apply(result)
-			}
-			var failure *ExternalEditorFailure
-			if errors.As(runErr, &failure) && ctx.Err() == nil && report != nil {
-				report(failure.Message)
-			}
-			if m.surface != nil {
-				// pig additive (D91): the frame after the handoff carries
-				// only what changed, such as the edited text.
-				m.surface.Resume()
-			} else {
-				m.tuiInst.Start()
-				m.tuiInst.RepaintAll()
-			}
-			if m.inputReader != nil {
-				m.inputReader.resume()
-			}
-			if resume := m.externalEditorInput; resume != nil {
-				m.externalEditorInput = nil
-				resume()
-			}
-		})
-	})
+	restore, drain, rawErr := tui.EnterRawModeWithDrain()
+	if rawErr != nil {
+		m.exitIfDeadTerminal(rawErr)
+		m.failInputLoop(rawErr)
+		return
+	}
+	m.rawRestore = restore
+	m.rawDrain = drain
+	if settle != nil {
+		settle()
+	}
+	if m.surface != nil {
+		// pig additive (D91): the frame after the handoff carries
+		// only what changed, such as the edited text.
+		m.surface.Resume()
+	} else {
+		m.tuiInst.Start()
+		m.tuiInst.RepaintAll()
+	}
+	if m.inputReader != nil {
+		m.inputReader.resume()
+	}
+	if resume := m.externalEditorInput; resume != nil {
+		m.externalEditorInput = nil
+		resume()
+	}
 }
 
 // toggleAllTools flips the global tool expansion state for the whole

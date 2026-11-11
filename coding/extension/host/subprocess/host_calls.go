@@ -44,7 +44,7 @@ func startsAsync(method string) bool {
 	case "ui.addAutocompleteProvider", "ui.autocomplete.invoke":
 		// The public call remains synchronous in its SDK. A reverse factory/provider callback can reenter the host, so release its call lane at callback initiation.
 		return true
-	case "ui.select", "ui.confirm", "ui.input", "ui.editor", CallUICustom,
+	case "ui.select", "ui.confirm", "ui.input", "ui.editor", CallUICustom, CallUIRunForeground,
 		"setModel", "registerProvider", "exec", CallLoadingExec, "complete", "modelStream", CallProviderObject, "getModelAuth", "getProviderAuth", "getAvailableOfType", "classify", "generateImages", "refreshModelRegistry", "compact",
 		"waitForIdle", "newSession", "fork", "navigateTree", "switchSession", "reload", CallExecuteTool, CallBuiltinToolExecute, CallBuiltinToolLocalExec, CallSessionGraphAsync,
 		CallChildSessionCreate, CallChildSessionPrompt, CallChildSessionQueue, CallChildSessionAbort, CallChildSessionBindExtensions, CallChildSessionEmit,

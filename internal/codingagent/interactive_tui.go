@@ -497,7 +497,7 @@ func (m *InteractiveMode) handleInterruptSignal() {
 // interruptShutdown records the SIGINT and gives extensions their shutdown event, for at most a second. It reports false when a suspended session ignores the signal.
 // The owner loop is never asked to unwind: Run returning lets main exit 0 while the caller is still on its way to os.Exit(130).
 func (m *InteractiveMode) interruptShutdown() bool {
-	if m.suspended.Load() {
+	if m.suspended.Load() || m.foregroundActive.Load() {
 		return false
 	}
 	// pig additive (D102): Pi dies on SIGINT with no trace.
