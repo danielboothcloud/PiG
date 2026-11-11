@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -364,4 +365,19 @@ func (r *ModelRuntime) Complete(model, request, options map[string]any) map[stri
 // CompleteSimple is the final message of StreamSimple.
 func (r *ModelRuntime) CompleteSimple(model, request, options map[string]any) map[string]any {
 	return r.StreamSimple(model, request, options).Result()
+}
+
+// StreamContext is Stream whose provider request a cancelled ctx aborts, as [ModelRegistry.StreamContext].
+func (r *ModelRuntime) StreamContext(ctx context.Context, model, request, options map[string]any) *ModelEventStream {
+	return r.registry().streamOnContext(ctx, r.Handle(), model, request, options, false)
+}
+
+// StreamSimpleContext is StreamSimple whose provider request a cancelled ctx aborts.
+func (r *ModelRuntime) StreamSimpleContext(ctx context.Context, model, request, options map[string]any) *ModelEventStream {
+	return r.registry().streamOnContext(ctx, r.Handle(), model, request, options, true)
+}
+
+// CompleteContext is the final message of StreamContext.
+func (r *ModelRuntime) CompleteContext(ctx context.Context, model, request, options map[string]any) map[string]any {
+	return r.StreamContext(ctx, model, request, options).Result()
 }

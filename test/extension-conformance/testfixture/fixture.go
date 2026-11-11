@@ -2198,6 +2198,16 @@ func Extension() *sdk.Extension {
 		return nil
 	})
 
+	ext.Command("model-cancel-probe", "Cancel ModelRegistry.CompleteContext after 100 ms", func(ctx sdk.Context, _ string) error {
+		model := map[string]any{"provider": "conformance", "id": "declared", "modelId": "declared", "api": "openai-responses"}
+		request := map[string]any{"messages": []any{map[string]any{"role": "user", "content": "hello", "timestamp": 1}}}
+		callCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		result := ctx.ModelRegistry().CompleteContext(callCtx, model, request, nil)
+		ctx.Notify(fmt.Sprintf("model-cancel=%v:%v", result["stopReason"], result["errorMessage"]), "info")
+		return nil
+	})
+
 	ext.Command("model-stream-callback-probe", "Exercise the provider request callbacks of ModelRegistry.Stream", func(ctx sdk.Context, _ string) error {
 		registry := ctx.ModelRegistry()
 		model := map[string]any{"provider": "conformance", "id": "declared", "modelId": "declared", "api": "openai-responses"}

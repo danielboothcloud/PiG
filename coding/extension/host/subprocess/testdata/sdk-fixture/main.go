@@ -455,6 +455,21 @@ func main() {
 		return nil
 	})
 
+	ext.Command("model-complete-cancel", "Cancel a model completion after 100 ms", func(ctx sdk.Context, _ string) error {
+		model := map[string]any{"id": "probe", "provider": "probe-provider", "api": "openai-completions"}
+		request := map[string]any{"messages": []any{map[string]any{"role": "user", "content": "hello"}}}
+		callCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		start := time.Now()
+		result := ctx.ModelRegistry().CompleteContext(callCtx, model, request, nil)
+		report, err := json.Marshal(map[string]any{"elapsedMs": time.Since(start).Milliseconds(), "stopReason": result["stopReason"], "errorMessage": result["errorMessage"]})
+		if err != nil {
+			return err
+		}
+		ctx.Notify(string(report), "info")
+		return nil
+	})
+
 	ext.Command("model-stream-probe", "Exercise model streaming", func(ctx sdk.Context, _ string) error {
 		registry := ctx.ModelRegistry()
 		current, err := registry.Find("conformance", "current")

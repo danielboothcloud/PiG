@@ -267,6 +267,22 @@ Extensions may register additional inference providers. The registration payload
 - `Context.Err()` reports `cancelled`, `deadline`, or `closed`.
 - Handlers should periodically check `Done()` between expensive steps. Host calls made from a cancelled context return a typed cancellation error promptly.
 
+### Cancelling model calls (Go)
+
+Pi aborts `ctx.modelRegistry.complete(model, context, { signal })` and `stream(...)` through `options.signal`. The Go SDK takes a `context.Context` instead (D235):
+
+```go
+callCtx, cancel := context.WithCancel(context.Background())
+defer cancel()
+message := ctx.ModelRegistry().CompleteContext(callCtx, model, request, nil)
+// message["stopReason"] == "aborted" after cancel()
+```
+
+- `ModelRegistry.StreamContext`, `StreamSimpleContext` and `CompleteContext`, and the same methods on `*sdk.ModelRuntime`, take the context as the first argument. The other arguments are those of `Stream`, `StreamSimple` and `Complete`.
+- Cancelling the context sends `cancelModelStream` for the stream. The host cancels the provider request, closes its HTTP connection, and the stream ends with the provider's aborted message (`stopReason` `"aborted"`), as Pi's providers end an aborted signal. A context that is already cancelled aborts the request as soon as it starts.
+- `Stream`, `StreamSimple` and `Complete` are unchanged and cannot be cancelled except through the handler's own request.
+- The cancelling context is independent of the `sdk.Context` that makes the call. Work that outlives a handler still calls through the `sdk.Context` from `OnLoaded`, and passes its own cancellable context, for example one derived from `context.Background()`.
+
 ## Unsupported / typed-error APIs
 
 Any host call exposed by an SDK that is not wired in a given build returns a typed `unsupported` error rather than silently no-oping. Coverage is tracked in `docs/extension-api-parity.md` in the pig source tree; this file is a snapshot.

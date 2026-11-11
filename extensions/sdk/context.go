@@ -1626,12 +1626,39 @@ func (r ModelRegistry) Stream(model, request, options map[string]any) *ModelEven
 	return r.stream(model, request, options, false)
 }
 
+// StreamContext is Stream with Pi's options.signal as ctx: cancelling ctx aborts the provider request in the host, and the stream ends as the provider ends an aborted request (stopReason "aborted"). A context whose Done is nil never cancels.
+// pig divergence (D235): Pi takes an AbortSignal in options; Go takes a context.Context.
+func (r ModelRegistry) StreamContext(ctx context.Context, model, request, options map[string]any) *ModelEventStream {
+	if r.runtime != nil {
+		return r.runtime.StreamContext(ctx, model, request, options)
+	}
+	return r.streamOnContext(ctx, "", model, request, options, false)
+}
+
+// StreamSimpleContext is StreamSimple with a cancelling ctx, as StreamContext.
+func (r ModelRegistry) StreamSimpleContext(ctx context.Context, model, request, options map[string]any) *ModelEventStream {
+	if r.runtime != nil {
+		return r.runtime.StreamSimpleContext(ctx, model, request, options)
+	}
+	return r.streamOnContext(ctx, "", model, request, options, true)
+}
+
+// CompleteContext is the final message of StreamContext. A cancelled ctx returns the provider's aborted message (stopReason "aborted").
+func (r ModelRegistry) CompleteContext(ctx context.Context, model, request, options map[string]any) map[string]any {
+	return r.StreamContext(ctx, model, request, options).Result()
+}
+
 func (r ModelRegistry) stream(model, request, options map[string]any, simple bool) *ModelEventStream {
 	return r.streamOn("", model, request, options, simple)
 }
 
 // streamOn runs the stream on the session graph ModelRuntime runtime names; empty is the Session's runtime.
 func (r ModelRegistry) streamOn(runtime string, model, request, options map[string]any, simple bool) *ModelEventStream {
+	return r.streamOnContext(context.Background(), runtime, model, request, options, simple)
+}
+
+// streamOnContext is streamOn whose provider request a cancelled ctx aborts. The cancelModelStream call follows the modelStream frame on the same request lane, so the host has registered the stream before it reads the cancellation.
+func (r ModelRegistry) streamOnContext(ctx context.Context, runtime string, model, request, options map[string]any, simple bool) *ModelEventStream {
 	stream := newModelEventStream()
 	streamID := fmt.Sprintf("model-stream-%d", r.context.ext.modelStreamSeq.Add(1))
 	r.context.ext.modelStreamsMu.Lock()
@@ -1658,7 +1685,19 @@ func (r ModelRegistry) streamOn(runtime string, model, request, options map[stri
 		if callbacks != nil {
 			callbacks.flags(call)
 		}
-		result, err := r.context.callHost("modelStream", call)
+		var sent func()
+		if ctx != nil && ctx.Done() != nil {
+			sent = func() {
+				go func() {
+					select {
+					case <-ctx.Done():
+						_, _ = r.context.callHost("cancelModelStream", map[string]string{"streamId": streamID})
+					case <-stream.done:
+					}
+				}()
+			}
+		}
+		result, err := r.context.callHostAfterBegin("modelStream", call, false, sent)
 		if err := callResultError(result, err); err != nil {
 			stream.push(modelStreamErrorEvent(err, model))
 		} else {

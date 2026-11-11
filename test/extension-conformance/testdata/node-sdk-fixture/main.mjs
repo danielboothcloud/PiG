@@ -558,6 +558,15 @@ export default function (pi) {
       ctx.ui.notify("model-stream=ok", "info");
     },
   });
+  pi.registerCommand("model-cancel-probe", {
+    description: "Abort modelRegistry.complete after 100 ms",
+    handler: async (_args, ctx) => {
+      const model = { provider: "conformance", id: "declared", modelId: "declared", api: "openai-responses" };
+      const request = { messages: [{ role: "user", content: "hello", timestamp: 1 }] };
+      const result = await ctx.modelRegistry.complete(model, request, { signal: AbortSignal.timeout(100) });
+      ctx.ui.notify(`model-cancel=${result.stopReason}:${result.errorMessage}`, "info");
+    },
+  });
   pi.registerCommand("model-stream-callback-probe", {
     description: "Exercise the provider request callbacks of modelRegistry.stream",
     handler: async (_args, ctx) => {
