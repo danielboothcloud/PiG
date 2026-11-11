@@ -448,6 +448,15 @@ function of the call's input (a hash-table) returning \"all\" or the words that 
 (defun ctx-set-session-name (ctx name)
   (ctx-call-host ctx "setSessionName" (obj "name" name)) nil)
 
+;; pig divergence (D234): Pi's extensions share one process.env; these write the Host's shared environment into every Node realm.
+(defun ctx-set-shared-env (ctx key value)
+  "Set KEY to VALUE in the process.env of every Node extension and Node provider."
+  (ctx-call-host ctx "env.setShared" (obj "key" key "value" value)) nil)
+
+(defun ctx-unset-shared-env (ctx key)
+  "Delete KEY from the process.env of every Node extension and Node provider."
+  (ctx-call-host ctx "env.setShared" (obj "key" key "value" :null)) nil)
+
 ;;; session manager reads --------------------------------------------------------
 
 (defstruct (session-manager (:constructor make-session-manager (ctx))) ctx)

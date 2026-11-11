@@ -3350,6 +3350,22 @@ impl Context {
         )
     }
 
+    /// Set `key` in the process.env of every Node extension and Node provider (pig divergence D234).
+    pub fn set_shared_env(&self, key: &str, value: &str) -> io::Result<()> {
+        call_result_to_io(self.call_wire(
+            "env.setShared",
+            Some(serde_json::json!({"key": key, "value": value})),
+        )?)
+    }
+
+    /// Delete `key` from the process.env of every Node extension and Node provider (pig divergence D234).
+    pub fn unset_shared_env(&self, key: &str) -> io::Result<()> {
+        call_result_to_io(self.call_wire(
+            "env.setShared",
+            Some(serde_json::json!({"key": key, "value": null})),
+        )?)
+    }
+
     /// Set or clear a label for a session entry.
     /// Sets or clears an entry label. The host's failure is returned, as
     /// upstream's setLabel throws when the session cannot record the label.

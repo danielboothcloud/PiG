@@ -21,7 +21,7 @@
    #:ctx-exec #:exec-result #:exec-result-stdout #:exec-result-stderr #:exec-result-exit-code #:exec-result-killed #:exec-result-truncated
    #:ctx-is-idle-p #:ctx-abort #:ctx-has-pending-messages-p #:ctx-shutdown #:ctx-compact #:ctx-reload
    #:ctx-get-flag #:ctx-get-system-prompt #:ctx-get-thinking-level #:ctx-get-all-tools #:ctx-get-active-tools
-   #:ctx-send-message #:ctx-send-user-message #:ctx-append-entry #:ctx-set-session-name
+   #:ctx-send-message #:ctx-send-user-message #:ctx-append-entry #:ctx-set-session-name #:ctx-set-shared-env #:ctx-unset-shared-env
    #:ctx-call-host
    #:ctx-set-active-tools #:ctx-get-commands #:ctx-get-context-usage #:ctx-get-system-prompt-options #:ctx-get-model-info
    #:ctx-get-model-auth #:ctx-get-scoped-models #:ctx-set-model #:ctx-set-thinking-level #:ctx-set-label #:ctx-wait-for-idle #:ctx-yield #:ctx-sleep

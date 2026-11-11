@@ -742,6 +742,24 @@ func (c Context) GetSessionName() (*string, error) {
 	return hostOptionalString(c, "getSessionName", "name")
 }
 
+// SetSharedEnv sets key to value in the process.env of every Node extension and Node provider, the environment Pi's extensions share in one process. The change reaches every running Node realm before the call returns and every Node realm the host starts later. It does not change this process's own environment. pig divergence (D234).
+func (c Context) SetSharedEnv(key, value string) error {
+	return c.setSharedEnv(key, &value)
+}
+
+// UnsetSharedEnv deletes key from the process.env of every Node extension and Node provider, including a value inherited from pig's own environment. pig divergence (D234).
+func (c Context) UnsetSharedEnv(key string) error {
+	return c.setSharedEnv(key, nil)
+}
+
+func (c Context) setSharedEnv(key string, value *string) error {
+	result, err := c.callHost("env.setShared", map[string]any{"key": key, "value": value})
+	if err != nil {
+		return err
+	}
+	return callResultError(result, nil)
+}
+
 // SetSessionName sets the session name.
 func (c Context) SetSessionName(name string) error {
 	result, err := c.callHost("setSessionName", map[string]string{"name": name})

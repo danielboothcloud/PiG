@@ -461,6 +461,8 @@ func (h *Host) runCall(me *managedExt, conn *Conn, callID string, call *CallPayl
 		result, err = h.handleMcpServerCheck(me, call)
 	case call.Method == CallParseFrontmatter:
 		result, err = h.handleParseFrontmatter(call)
+	case call.Method == CallSetSharedEnv:
+		result, err = h.handleSetSharedEnv(call)
 	case call.Method == CallParseDate:
 		result, err = h.handleParseDate(call)
 	case call.Method == CallGenerateDiffString:

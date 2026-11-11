@@ -490,6 +490,7 @@ func (h *Host) startGoPackedCellOnce(ctx context.Context, cell *runtimecell.GoPa
 			pending.me.nodeRealm = true
 		}
 		h.noteNodeRealm(pendingExts[0].me, busRouted)
+		env = h.withSharedEnv(env)
 	}
 	env = append(env,
 		fmt.Sprintf("PIG_EXT_PACKED_CELL=%s", cell.Key),
@@ -874,6 +875,9 @@ func (h *Host) acceptPackedExt(ctx context.Context, me *managedExt, ln net.Liste
 	me.setConnLocked(conn)
 	h.mu.Unlock()
 	conn.Start(runtimeParent(ctx))
+	if me.nodeRealm {
+		h.sendSharedEnvSnapshot(conn)
+	}
 
 	reg, err := h.waitForRegister(ctx, me, conn)
 	if err != nil {

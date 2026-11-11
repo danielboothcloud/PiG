@@ -1184,6 +1184,15 @@ function endsPrompt(request, declaredMode, runActive) {
   return request?.method === "command" || (request?.method === "event" && PROMPT_END_EVENTS.has(request.event));
 }
 
+// applySharedEnv writes a NotifySharedEnv update into process.env: a string sets the key, null deletes it.
+function applySharedEnv(args) {
+  if (typeof args === "string") args = JSON.parse(args);
+  for (const [key, value] of Object.entries(args?.values ?? {})) {
+    if (typeof value === "string") process.env[key] = value;
+    else delete process.env[key];
+  }
+}
+
 // noteHostStep records env, read on conn, toward the host's next step: a request, shutdown or reload_started is the step; invalidate or a run beginning is the step once every open connection of the process has read its copy.
 // A run beginning stands for the loop turn Pi's run makes at the bash tool's I/O, which runs the immediates and due timers the prompt's last handler queued before anything the host does next. A process the OS scheduled late reads the run's later frames, the run's end and the shutdown request among them, in the same pass as the run beginning, and its serve loop would run that request in the microtasks that follow the wait, before the check phase and with the wait entered again, so the immediate never ran: the frames after the run beginning are held until an immediate queued now runs (holdAfterTurn), after those queued earlier.
 function noteHostStep(conn, env) {
@@ -1299,6 +1308,11 @@ export class Connection {
     }
     if (env.type === "notify" && env.notify?.method === "loop_turn_taken") {
       if (env.notify.args?.turn === turnWait.turn) turnWait.turn = 0;
+      return;
+    }
+    // pig divergence (D234): the Host's shared environment. Pi's extensions share one process.env, so a value another realm set is visible to the next read here; the change applies on receipt, before any later frame.
+    if (env.type === "notify" && env.notify?.method === "env.shared") {
+      applySharedEnv(env.notify.args);
       return;
     }
     if (env.type === "notify" && env.notify?.method === "loop_turned") {

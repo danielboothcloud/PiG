@@ -27,6 +27,9 @@ import (
 //	collect                        node only, under PIG_TEST_XREF_COLLECT=1: collect the process's garbage and release the cross-process references it freed
 //	kept                           node only: log "<name>|kept|[payloads kept by the keep action]"
 //	unkeep                         node only: drop the payloads the keep action kept
+//	envset <key> <value>           native only: set a shared environment value (D234)
+//	envunset <key>                 native only: delete a shared environment value (D234)
+//	envget <key>                   node only: log "<name>|env|{key: process.env[key] or null}"
 //
 // An action list joins operations with "+": later (node only: record from a microtask, the listener's first continuation), record, echo=<channel> (emit {by, got} from the handler), inc (data.n++), fail (return or throw an error), panic (a Go panic, a thrown non-Error), unsub=<index>, exit (end the process), sleep=<ms>, count (count the delivery), hang (block until <log>.release exists), keep (node only: keep the payload past its delivery).
 type busFixture struct {
@@ -108,6 +111,7 @@ export default function (pi) {
   pi.registerCommand("collect", { description: "collect", handler: async () => { globalThis[Symbol.for("pig.test.xrefCollect")](); } });
   pi.registerCommand("kept", { description: "kept", handler: async () => { log("kept", kept); } });
   pi.registerCommand("unkeep", { description: "unkeep", handler: async () => { kept.length = 0; } });
+  pi.registerCommand("envget", { description: "envget", handler: async args => { log("env", { [args]: Object.hasOwn(process.env, args) ? process.env[args] : null }); } });
 }
 `
 
@@ -274,6 +278,13 @@ func Extension() *sdk.Extension {
 		logf("counts", snapshot)
 		return nil
 	})
+	e.Command("envset", "", func(ctx sdk.Context, args string) error {
+		key, value, _ := strings.Cut(args, " ")
+		return ctx.SetSharedEnv(key, value)
+	})
+	e.Command("envunset", "", func(ctx sdk.Context, args string) error {
+		return ctx.UnsetSharedEnv(args)
+	})
 	e.Command("burst", "", func(ctx sdk.Context, args string) error {
 		channel, count, _ := strings.Cut(args, " ")
 		n, _ := strconv.Atoi(count)
@@ -420,6 +431,12 @@ def new_extension():
             snapshot = dict(counts)
         logf("counts", snapshot)
 
+    def envset(ctx, args):
+        key, _, value = args.partition(" ")
+        ctx.set_shared_env(key, value)
+
+    e.command("envset", "", envset)
+    e.command("envunset", "", lambda ctx, args: ctx.unset_shared_env(args))
     e.command("emit", "", emit)
     e.command("emitmark", "", emitmark)
     e.command("sub", "", sub)
@@ -526,6 +543,8 @@ const lispBusFixture = `(defpackage %[2]q (:use "COMMON-LISP"))
                                        (pig:events-emit (pig:ctx-events ctx) (first parts) (pig:from-json (second parts)))
                                        (logf (concatenate 'string (first parts) ":returned") nil))))
       (pig:command e "sub" "" (lambda (ctx args) (let ((parts (split-on #\Space args 2))) (subscribe (pig:ctx-events ctx) (first parts) (or (second parts) "")))))
+      (pig:command e "envset" "" (lambda (ctx args) (let ((parts (split-on #\Space args 2))) (pig:ctx-set-shared-env ctx (first parts) (or (second parts) "")))))
+      (pig:command e "envunset" "" (lambda (ctx args) (pig:ctx-unset-shared-env ctx args)))
       (pig:command e "unsub" "" (lambda (ctx args) (declare (ignore ctx)) (funcall (sb-thread:with-mutex (lock) (nth (parse-integer args) subs)))))
       (pig:command e "burst" "" (lambda (ctx args)
                                   (let ((parts (split-on #\Space args 2)))
@@ -623,6 +642,13 @@ pub fn new_extension() -> Extension {
         let sub = s.subs.lock().unwrap()[args.trim().parse::<usize>().unwrap()].clone();
         sub.unsubscribe();
         CommandResult::Ok
+    });
+    e.command("envset", "", move |ctx, args| {
+        let (key, value) = args.split_once(' ').unwrap_or((args, ""));
+        match ctx.set_shared_env(key, value) { Ok(()) => CommandResult::Ok, Err(err) => CommandResult::Error(err.to_string()) }
+    });
+    e.command("envunset", "", move |ctx, args| {
+        match ctx.unset_shared_env(args) { Ok(()) => CommandResult::Ok, Err(err) => CommandResult::Error(err.to_string()) }
     });
     e.command("burst", "", move |ctx, args| {
         let (channel, count) = args.split_once(' ').unwrap();

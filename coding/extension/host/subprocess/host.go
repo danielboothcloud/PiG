@@ -283,6 +283,8 @@ type Host struct {
 	// providerConfigRefs maps a provider to the xref of its effective registered configuration root in the owning Node realm.
 	providerConfigRefs map[string]providerConfigRef
 	eventBus           hostEventBus
+	// sharedEnv holds the environment values extensions share with every Node realm (shared_env.go).
+	sharedEnv sharedEnv
 	// loopTurns holds each forwarded loop turn until every recipient took it (forwardLoopTurned).
 	loopTurns loopTurns
 	// childSessions holds the child agent sessions each connection created (child_session.go).
@@ -3217,7 +3219,7 @@ func (h *Host) connectExt(ctx, extCtx context.Context, cancel context.CancelFunc
 			cmd.Env = append(cmd.Env, eventBusRoutedEnv)
 		}
 		h.noteNodeRealm(me, busRouted)
-		cmd.Env = h.withNodeRuntimeEnv(cmd.Env)
+		cmd.Env = h.withNodeRuntimeEnv(h.withSharedEnv(cmd.Env))
 	}
 	if me.config.RuntimeLanguage == "python" || strings.HasSuffix(binPath, ".py") {
 		// A binary that embeds no Python SDK stages none, so there is nothing to put first.
@@ -3399,6 +3401,9 @@ func (h *Host) adoptConn(ctx context.Context, me *managedExt, rawConn net.Conn, 
 	h.mu.Unlock()
 	h.releaseProviderCallbacks(released)
 	conn.Start(extCtx)
+	if me.nodeRealm {
+		h.sendSharedEnvSnapshot(conn)
+	}
 
 	// Wait for register message. Like connecting, registering has no host
 	// deadline: it ends when the extension registers, its connection closes,

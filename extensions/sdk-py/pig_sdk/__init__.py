@@ -3177,6 +3177,14 @@ class Context:
     def set_session_name(self, name: str) -> None:
         self._call("setSessionName", {"name": name})
 
+    def set_shared_env(self, key: str, value: str) -> None:
+        """Set ``key`` in the process.env of every Node extension and Node provider (pig divergence D234)."""
+        self._call("env.setShared", {"key": key, "value": value})
+
+    def unset_shared_env(self, key: str) -> None:
+        """Delete ``key`` from the process.env of every Node extension and Node provider (pig divergence D234)."""
+        self._call("env.setShared", {"key": key, "value": None})
+
     def set_label(self, entry_id: str, label: str) -> None:
         self._call("setLabel", {"entryId": entry_id, "label": label})
 
