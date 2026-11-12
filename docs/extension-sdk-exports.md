@@ -13,7 +13,7 @@ Use counts (`uses`) are the number of the 255 scanned npm packages that import t
 | `pi-coding-agent` | 927 | 307 | 917 | 325 | 325 | 325 | 325 |
 | `pi-tui` | 370 | 85 | 369 | 102 | 102 | 102 | 102 |
 | `pi-ai` | 105 | 197 | 105 | 73 | 73 | 73 | 73 |
-| `pi-ai/compat` | 164 | 204 | 164 | 129 | 129 | 129 | 129 |
+| `pi-ai/compat` | 164 | 204 | 164 | 128 | 129 | 128 | 129 |
 | `pi-agent-core` | 45 | 35 | 45 | 45 | 45 | 45 | 45 |
 
 ## Lanes that own gaps
@@ -21,8 +21,9 @@ Use counts (`uses`) are the number of the 255 scanned npm packages that import t
 | Lane | Owner | Opened | Gap cells | Closing row |
 |---|---|---|---|---|
 | C2Sessions | C2Sessions lane (createAgentSession family, E1/E6) | 0.5.2 | 468 | Conformance rows for createAgentSession, createAgentSessionRuntime and the pi-agent-core Agent loop in all four SDKs (branch feat/sdk-child-agent-sessions) |
-| SdkExportsLedger | SdkExportsLedger lane (Pi application internals no extension scan imports) | 0.5.2 | 1572 | Owner decision per export, listed with usage counts in handoffs/0.5.2/sdk-exports-internals.md: a numbered divergence in docs/parity/DIVERGENCES.md (cells become divergence:D<n>), or a real lane with a port and a conformance row |
+| SdkExportsLedger | SdkExportsLedger lane (Pi application internals no extension scan imports) | 0.5.2 | 1568 | Owner decision per export, listed with usage counts in handoffs/0.5.2/sdk-exports-internals.md: a numbered divergence in docs/parity/DIVERGENCES.md (cells become divergence:D<n>), or a real lane with a port and a conformance row |
 | SdkPiAiHelpers | SdkPiAiHelpers lane (pi-ai pure helpers, StringEnum, host getters, E17-E22) | 0.5.2 | 256 | Pure helpers with vector tests from Pi at the pin; host getters and the pi-ai compat calls with a conformance row per SDK |
+| SdkRawAnthropic | Raw Anthropic SDK transport | 0.5.2 | 2 | Port anthropicMessagesApi to Rust and Lisp with TestAnthropicMessagesAPIRawTransport rows, and forward the caller callbacks of provider_stream_simple in both (TestLegacyWrapperRawTransportCallbacks rows); Rust's legacy streamSimple options are a serde Value and need a callback-carrying form |
 | SdkSessionGraph | SdkSessionGraph lane (SessionManager/SettingsManager/ModelRuntime/resource loader, E2-E5) | 0.5.2 | 252 | Host calls for session open/list/inMemory, scoped settings, standalone model runtime, resource loader and package manager, with a conformance row per SDK |
 | SdkTuiHelpers | SdkTuiHelpers lane (pi-tui helpers, keys, keybindings, theme and rendering helpers, E8-E16) | 0.5.2 | 148 | Pure helpers ported per SDK with vector tests from Pi at the pin (test/parity/sdk-vectors), keybinding and theme helpers with a conformance row per SDK |
 
@@ -1506,7 +1507,7 @@ None.
 | `ToolCallArgumentsStream.replace` | 0 | served | gap:SdkPiAiHelpers | gap:SdkPiAiHelpers | gap:SdkPiAiHelpers | gap:SdkPiAiHelpers |
 | `ToolCallArgumentsStream.text` | 0 | served | gap:SdkPiAiHelpers | gap:SdkPiAiHelpers | gap:SdkPiAiHelpers | gap:SdkPiAiHelpers |
 | `Type` | 14 | served | native:Type | native:Type | native:Type | native:pig:type-object |
-| `anthropicMessagesApi` | 3 | served | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger |
+| `anthropicMessagesApi` | 3 | served | native:AnthropicMessagesAPI | gap:SdkRawAnthropic | native:anthropic_messages_api | gap:SdkRawAnthropic |
 | `appendAssistantMessageDiagnostic` | 1 | served | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger |
 | `azureOpenAIResponsesApi` | 0 | served | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger |
 | `bedrockConverseStreamApi` | 0 | served | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger | gap:SdkExportsLedger |

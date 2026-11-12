@@ -29,6 +29,8 @@ type (
 	OnPayloadFunc        func(payload any, model map[string]any) (any, error)
 	OnResponseFunc       func(response map[string]any, model map[string]any) error
 	TransformHeadersFunc func(headers map[string]any, model map[string]any) (map[string]any, error)
+	// OnProviderStreamEventFunc observes each parsed provider stream event before normalization (types.ts StreamOptions.onProviderStreamEvent). The data is the provider's and read-only.
+	OnProviderStreamEventFunc func(data any, model map[string]any) error
 	// ModelFetchFunc is a model request transport.
 	ModelFetchFunc func(request *http.Request) (*http.Response, error)
 )
@@ -38,6 +40,7 @@ type modelStreamCallbacks struct {
 	onPayload        OnPayloadFunc
 	onResponse       OnResponseFunc
 	transformHeaders TransformHeadersFunc
+	onStreamEvent    OnProviderStreamEventFunc
 	fetch            ModelFetchFunc
 
 	fetchMu     sync.Mutex
@@ -46,7 +49,7 @@ type modelStreamCallbacks struct {
 }
 
 func modelStreamCallbackOption(key string) bool {
-	return key == "onPayload" || key == "onResponse" || key == "transformHeaders" || key == "fetch"
+	return key == "onPayload" || key == "onResponse" || key == "transformHeaders" || key == "fetch" || key == "onProviderStreamEvent"
 }
 
 // takeModelStreamCallbacks reads the callbacks out of the stream options, nil when there are none. A named callback type and its plain
@@ -72,13 +75,19 @@ func takeModelStreamCallbacks(options map[string]any, model map[string]any) *mod
 	case func(map[string]any, map[string]any) (map[string]any, error):
 		callbacks.transformHeaders = fn
 	}
+	switch fn := options["onProviderStreamEvent"].(type) {
+	case OnProviderStreamEventFunc:
+		callbacks.onStreamEvent = fn
+	case func(any, map[string]any) error:
+		callbacks.onStreamEvent = fn
+	}
 	switch fn := options["fetch"].(type) {
 	case ModelFetchFunc:
 		callbacks.fetch = fn
 	case func(*http.Request) (*http.Response, error):
 		callbacks.fetch = fn
 	}
-	if callbacks.onResponse != nil || callbacks.transformHeaders != nil || callbacks.fetch != nil {
+	if callbacks.onResponse != nil || callbacks.transformHeaders != nil || callbacks.fetch != nil || callbacks.onStreamEvent != nil {
 		found = true
 	}
 	if !found {
@@ -100,6 +109,9 @@ func (c *modelStreamCallbacks) flags(call map[string]any) {
 	}
 	if c.fetch != nil {
 		call["fetch"] = true
+	}
+	if c.onStreamEvent != nil {
+		call["onProviderStreamEvent"] = true
 	}
 }
 
@@ -311,6 +323,15 @@ func (e *Extension) modelStreamCallback(ctx context.Context, args json.RawMessag
 			return nil, err
 		}
 		return nil, callbacks.onResponse(response, callbacks.model)
+	case "onProviderStreamEvent":
+		if callbacks.onStreamEvent == nil {
+			break
+		}
+		var data any
+		if err := json.Unmarshal(request.Value, &data); err != nil {
+			return nil, err
+		}
+		return nil, callbacks.onStreamEvent(data, callbacks.model)
 	case "transformHeaders":
 		if callbacks.transformHeaders == nil {
 			break

@@ -61,6 +61,12 @@ func modelStreamCallbacks(ctx context.Context, owner *Conn, request ModelStreamC
 			return err
 		}
 	}
+	if request.OnProviderStreamEvent {
+		callbacks.OnProviderStreamEvent = func(ctx context.Context, data any, _ *ai.Model) error {
+			_, err := invoke(ctx, "onProviderStreamEvent", data)
+			return err
+		}
+	}
 	if request.TransformHeaders {
 		callbacks.TransformHeaders = func(ctx context.Context, headers ai.ProviderHeaders) (ai.ProviderHeaders, error) {
 			result, err := invoke(ctx, "transformHeaders", headers)

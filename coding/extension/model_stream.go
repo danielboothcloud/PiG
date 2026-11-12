@@ -17,6 +17,8 @@ type ModelStreamRequest struct {
 	OnPayload        func(any, *ai.Model) (any, error)
 	OnResponse       func(context.Context, ai.ProviderResponse, *ai.Model) error
 	TransformHeaders func(context.Context, ai.ProviderHeaders) (ai.ProviderHeaders, error)
+	// OnProviderStreamEvent is the caller's observer of each parsed provider stream event (types.ts StreamOptions.onProviderStreamEvent).
+	OnProviderStreamEvent func(context.Context, any, *ai.Model) error
 }
 
 type modelStreamRequestKey struct{}

@@ -15,6 +15,7 @@ import copy
 import dataclasses
 import decimal
 import io
+import itertools
 import json
 import math
 import os
@@ -153,6 +154,7 @@ from .provider import (
     ModelsPublication as ModelsPublication, RefreshModelsContext as RefreshModelsContext,
     ProviderStreamOptions as ProviderStreamOptions,
     ProviderOperationOptions as ProviderOperationOptions,
+    PROVIDER_STREAM_CALLBACKS,
     register_native as _register_native, remote_provider as _remote_provider,
     dispatch_provider as _dispatch_provider, dispatch_callback as _dispatch_provider_callback,
     dispatch_operation as _dispatch_provider_operation,
@@ -1339,7 +1341,7 @@ def _terminal_input_verdict(verdict: Any) -> tuple[bool, str | None]:
 
 
 # Pi's ProviderRequestOptions callbacks that ctx.model_registry.stream forwards (the host asks for them by name through model_stream_callback).
-_MODEL_STREAM_CALLBACKS = ("onPayload", "onResponse", "transformHeaders", "fetch")
+_MODEL_STREAM_CALLBACKS = ("onPayload", "onResponse", "onProviderStreamEvent", "transformHeaders", "fetch")
 
 
 class _IterableBody:
@@ -1813,7 +1815,7 @@ class ModelRegistry:
     def stream(self, model: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> ModelEventStream:
         return self._stream(model, request, options, False)
 
-    def _stream(self, model: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None, simple: bool, runtime: str | None = None) -> ModelEventStream:
+    def _stream(self, model: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None, simple: bool, runtime: str | None = None, api_request: bool = False, signal: "ProviderSignal | None" = None) -> ModelEventStream:
         stream = ModelEventStream()
         extension = self._context.extension
         with extension._model_stream_lock:
@@ -1837,8 +1839,29 @@ class ModelRegistry:
                 call = {"streamId": stream_id, "model": model, "request": payload, "simple": simple}
                 if runtime:
                     call["runtime"] = runtime
+                if api_request:
+                    call["apiRequest"] = True
                 call.update({name: True for name in callbacks})
-                self._context._call("modelStream", call)
+                if signal is None:
+                    self._context._call("modelStream", call)
+                else:
+                    # The cancellation follows the modelStream frame on the same request lane, so the host has registered the stream before it reads it.
+                    ctx = self._context
+                    call_id, done = extension._begin_call("modelStream", call, ctx.request_id, ctx._parent)
+
+                    def cancel_stream() -> None:
+                        def send() -> None:
+                            try:
+                                extension._call("cancelModelStream", {"streamId": stream_id}, ctx.request_id)
+                            except Exception:  # noqa: BLE001 - the stream's own end reports the outcome
+                                pass
+                        threading.Thread(target=send, daemon=True).start()
+
+                    unsubscribe = signal.subscribe(cancel_stream)
+                    try:
+                        extension._wait_call(call_id, done, "modelStream")
+                    finally:
+                        unsubscribe()
             except Exception as exc:  # noqa: BLE001 - transport failure becomes terminal model error
                 stream.push(_model_stream_error_event(exc, model))
             finally:
@@ -1856,6 +1879,96 @@ class ModelRegistry:
 
     def complete(self, model: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any] | None:
         return self.stream(model, request, options).result()
+
+
+def anthropic_messages_api(ctx: "Context") -> ProviderStreams:
+    """pi-ai's ``anthropicMessagesApi()`` (api/anthropic-messages.lazy.ts): Pi's built-in Anthropic transport, which bypasses registered provider callbacks, so a provider's ``stream_simple`` can wrap it without calling itself. Each function takes ``(model, transcript, options)`` with a :class:`ProviderStreamOptions` and returns the stream at once; setup and transport failures end it with an error event. ``options.signal`` owns cancellation: a signal already set ends the stream as aborted and sends no request, as Pi's bridged API does. ``on_payload``, ``on_response``, ``on_provider_stream_event`` and ``values["fetch"]`` are the request callbacks."""
+
+    def start(simple: bool) -> Callable[[dict, dict, ProviderStreamOptions], ModelEventStream]:
+        def run(model: dict[str, Any], transcript: dict[str, Any], options: ProviderStreamOptions | None = None) -> ModelEventStream:
+            options = options if options is not None else ProviderStreamOptions()
+            if options.signal is not None and options.signal.is_set():
+                aborted = _model_stream_error_event(RuntimeError("Request aborted"), model)
+                aborted["reason"] = "aborted"
+                aborted["error"]["stopReason"] = "aborted"
+                stream = ModelEventStream()
+                stream.push(aborted)
+                return stream
+            values = dict(options.values or {})
+            for name, attribute in PROVIDER_STREAM_CALLBACKS:
+                callback = getattr(options, attribute)
+                if callback is not None:
+                    values[name] = callback
+            return ModelRegistry(ctx)._stream(model, transcript, values, simple, api_request=True, signal=options.signal)
+
+        return run
+
+    return ProviderStreams(stream=start(False), stream_simple=start(True))
+
+
+def _legacy_stream_callbacks(ctx: "Context", provider: str, names: Any) -> dict[str, Any]:
+    """The caller's function-valued request options a provider_stream_simple request names, as the members Pi's composer passes to streamSimple. Each calls the caller in the host through provider.callback with this request as its parent, so it works only while the request runs."""
+
+    def call(method: str, params: dict[str, Any]) -> Any:
+        return ctx._call("provider.callback", {"provider": provider, "method": method, "params": params}).get("result")
+
+    options: dict[str, Any] = {}
+    for name in names if isinstance(names, list) else []:
+        if name in ("onPayload", "onResponse", "onProviderStreamEvent"):
+            def callback(value: Any, model: dict[str, Any], _name: str = name) -> Any:
+                result = call(_name, {"value": value, "model": model})
+                return result if _name == "onPayload" else None
+            options[name] = callback
+        elif name == "fetch":
+            options[name] = _caller_fetch(call)
+    return options
+
+
+def _caller_fetch(call: Callable[[str, dict[str, Any]], Any]) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """The caller's fetch as this SDK's fetch option: the host runs the request through the caller's transport, and the body streams back in bounded reads."""
+    counter = itertools.count(1)
+
+    def fetch(request: dict[str, Any]) -> dict[str, Any]:
+        signal = request.get("signal")
+        if signal is not None and signal.is_set():
+            raise RuntimeError("model fetch was cancelled")
+        fetch_id = str(next(counter))
+        headers: dict[str, list[str]] = {}
+        for name, value in (request.get("headers") or {}).items():
+            headers[str(name)] = [str(item) for item in value] if isinstance(value, (list, tuple)) else [str(value)]
+        value: dict[str, Any] = {"id": fetch_id, "url": request["url"], "method": request["method"], "headers": headers}
+        if request.get("body") is not None:
+            body = request["body"]
+            value["body"] = base64.b64encode(body.encode("utf-8") if isinstance(body, str) else bytes(body)).decode("ascii")
+        result = call("fetch", {"value": value}) or {}
+        return {"status": result.get("status"), "statusText": result.get("statusText") or "", "headers": result.get("headers") or [], "body": _CallerFetchBody(call, fetch_id) if result.get("body") else None}
+
+    return fetch
+
+
+class _CallerFetchBody:
+    """A caller fetch's response body: each read pulls at most ``size`` bytes from the host, and close releases the host's reader."""
+
+    def __init__(self, call: Callable[[str, dict[str, Any]], Any], fetch_id: str) -> None:
+        self._call = call
+        self._id = fetch_id
+        self._done = False
+        self._closed = False
+
+    def read(self, size: int = 64 * 1024) -> bytes:
+        while not self._done:
+            chunk = self._call("fetchRead", {"value": {"id": self._id, "size": max(1, min(int(size), 64 * 1024))}}) or {}
+            data = base64.b64decode(chunk.get("data") or "")
+            self._done = bool(chunk.get("done"))
+            if data:
+                return data
+        return b""
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._call("fetchClose", {"value": {"id": self._id}})
 
 
 _THINKING_BORDER_TOKENS = {
@@ -5633,7 +5746,10 @@ class Extension:
             elif method == "provider_stream_simple":
                 cancel = ctx._cancelled
                 args = req.get("args") or {}
-                stream = self._provider_streams[req.get("tool", "")](ctx, args["model"], args["context"], args["options"])
+                options = dict(args.get("options") or {})
+                # Pi's composer passes the caller's options object, function members included, to streamSimple.
+                options.update(_legacy_stream_callbacks(ctx, req.get("tool", ""), args.get("callbacks")))
+                stream = self._provider_streams[req.get("tool", "")](ctx, args["model"], args["context"], options)
                 with self._state_lock:
                     self._provider_active[req_id] = stream
                     if cancel.is_set():

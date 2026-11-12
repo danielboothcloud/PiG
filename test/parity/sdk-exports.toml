@@ -48,6 +48,11 @@ owner = "SdkPiAiHelpers lane (pi-ai pure helpers, StringEnum, host getters, E17-
 opened = "0.5.2"
 closing = "Pure helpers with vector tests from Pi at the pin; host getters and the pi-ai compat calls with a conformance row per SDK"
 
+[lane.SdkRawAnthropic]
+owner = "Raw Anthropic SDK transport"
+opened = "0.5.2"
+closing = "Port anthropicMessagesApi to Rust and Lisp with TestAnthropicMessagesAPIRawTransport rows, and forward the caller callbacks of provider_stream_simple in both (TestLegacyWrapperRawTransportCallbacks rows); Rust's legacy streamSimple options are a serde Value and need a callback-carrying form"
+
 [lane.SdkSessionGraph]
 owner = "SdkSessionGraph lane (SessionManager/SettingsManager/ModelRuntime/resource loader, E2-E5)"
 opened = "0.5.2"
@@ -1508,7 +1513,7 @@ closing = "Pure helpers ported per SDK with vector tests from Pi at the pin (tes
 "pi-ai/compat: ToolCallArgumentsStream.replace" = { go = "gap:SdkPiAiHelpers", rust = "gap:SdkPiAiHelpers", python = "gap:SdkPiAiHelpers", lisp = "gap:SdkPiAiHelpers" }
 "pi-ai/compat: ToolCallArgumentsStream.text" = { go = "gap:SdkPiAiHelpers", rust = "gap:SdkPiAiHelpers", python = "gap:SdkPiAiHelpers", lisp = "gap:SdkPiAiHelpers" }
 "pi-ai/compat: Type" = { go = "native:Type", rust = "native:Type", python = "native:Type", lisp = "native:pig:type-object" }
-"pi-ai/compat: anthropicMessagesApi" = { go = "gap:SdkExportsLedger", rust = "gap:SdkExportsLedger", python = "gap:SdkExportsLedger", lisp = "gap:SdkExportsLedger" }
+"pi-ai/compat: anthropicMessagesApi" = { go = "native:AnthropicMessagesAPI", rust = "gap:SdkRawAnthropic", python = "native:anthropic_messages_api", lisp = "gap:SdkRawAnthropic" }
 "pi-ai/compat: appendAssistantMessageDiagnostic" = { go = "gap:SdkExportsLedger", rust = "gap:SdkExportsLedger", python = "gap:SdkExportsLedger", lisp = "gap:SdkExportsLedger" }
 "pi-ai/compat: azureOpenAIResponsesApi" = { go = "gap:SdkExportsLedger", rust = "gap:SdkExportsLedger", python = "gap:SdkExportsLedger", lisp = "gap:SdkExportsLedger" }
 "pi-ai/compat: bedrockConverseStreamApi" = { go = "gap:SdkExportsLedger", rust = "gap:SdkExportsLedger", python = "gap:SdkExportsLedger", lisp = "gap:SdkExportsLedger" }

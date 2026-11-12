@@ -285,6 +285,9 @@ type Host struct {
 	eventBus           hostEventBus
 	// sharedEnv holds the environment values extensions share with every Node realm (shared_env.go).
 	sharedEnv sharedEnv
+	// legacyStreams holds the caller callbacks of each in-flight provider_stream_simple request (legacy_stream_callbacks.go).
+	legacyStreamsMu sync.Mutex
+	legacyStreams   map[legacyStreamKey]nativeProviderCallback
 	// loopTurns holds each forwarded loop turn until every recipient took it (forwardLoopTurned).
 	loopTurns loopTurns
 	// childSessions holds the child agent sessions each connection created (child_session.go).

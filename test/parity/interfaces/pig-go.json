@@ -129520,6 +129520,17 @@
       "shapeHash": "sha256:3de95d4d7d723c08b764d296efc79f91994171b5762a2a25a21ff17ce7ef7c92"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#Host.addLegacyStreamCallback",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "Host.addLegacyStreamCallback",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(conn *Conn, id string, callback nativeProviderCallback) func()"
+      },
+      "shapeHash": "sha256:96c85aa5250f18f91c9cb5b6ec779486a5851c795530319d07c13da56f9f2c64"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#Host.adoptConn",
       "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
       "name": "Host.adoptConn",
@@ -130739,6 +130750,17 @@
         "type": "func(ctx context.Context, me *managedExt)"
       },
       "shapeHash": "sha256:dd569238ff20176c7292e9991f8096cecc890e42e291dcf4f3431e2f9d254085"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#Host.legacyStreamCallback",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "Host.legacyStreamCallback",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(conn *Conn, parent string) nativeProviderCallback"
+      },
+      "shapeHash": "sha256:7026bdc0193f93035cb11d5d93dd2f71b9a5d0624ae4c520d0de94c86c536f29"
     },
     {
       "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#Host.lispCommand",
@@ -140344,6 +140366,61 @@
       "shapeHash": "sha256:14f5b1aa8e6b3d1b918f7ff99b23d6b1a3f73179b2632784b40fc159fcaa1039"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#callerFetch",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "callerFetch",
+      "kind": "type",
+      "exported": false,
+      "shape": {
+        "type": "callerFetch"
+      },
+      "shapeHash": "sha256:9eecc88519254e13efa9129ec0cea7a071fc00da5dfc936b7e1283c1f42b00ce"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#callerFetch.close",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "callerFetch.close",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func()"
+      },
+      "shapeHash": "sha256:032e891204f123caf14d3d421fa9728efc3f31299c17e98859c219dccddd74fb"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#callerFetch.serve",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "callerFetch.serve",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(callbackCtx context.Context, method string, value encoding/json.RawMessage) (any, error)"
+      },
+      "shapeHash": "sha256:1268ad554e11fb2eec23d2596c34bd4aa256555a102de50db7f503174af14490"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#callerFetchEntry",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "callerFetchEntry",
+      "kind": "type",
+      "exported": false,
+      "shape": {
+        "type": "callerFetchEntry"
+      },
+      "shapeHash": "sha256:2f4b9922c833f2e7f2e784011ac5021b1e589f64723aab8130edc3ba40dc4965"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#callerFetchStatusText",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "callerFetchStatusText",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(response *net/http.Response) string"
+      },
+      "shapeHash": "sha256:a5d9b7404b1c5bcc1a755f97c247e905de4b70db6cc449dbd7b4efacb6c74f38"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#cargoBuildTargetDirectory",
       "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
       "name": "cargoBuildTargetDirectory",
@@ -142707,6 +142784,17 @@
         "type": "func(a any, b any) bool"
       },
       "shapeHash": "sha256:a59657a2b9e0e9ec20aec8dea725a110f7760c25aa27976c1cfda2921ee82adc"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#errCallerFetchClosed",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "errCallerFetchClosed",
+      "kind": "variable",
+      "exported": false,
+      "shape": {
+        "type": "error"
+      },
+      "shapeHash": "sha256:6320ac68bd22b44fdcc4619eb1bb6166e15ab5fc8e78dbf2401aeda8f9e49a1d"
     },
     {
       "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#errDeltaUnsupported",
@@ -145151,6 +145239,28 @@
       "shapeHash": "sha256:e464e6de3ad35418f6e6dfe34abdf0de696ea4b2b49704e3c41e4184b74f805f"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#legacyStreamCallbackNames",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "legacyStreamCallbackNames",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(options github.com/MichaelKinsy/PiG/ai.StreamOptions) []string"
+      },
+      "shapeHash": "sha256:9966a56bbba65b87ce44f91e28d7430bb94de2590b5ce6016650ba0327140337"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#legacyStreamKey",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "legacyStreamKey",
+      "kind": "type",
+      "exported": false,
+      "shape": {
+        "type": "legacyStreamKey"
+      },
+      "shapeHash": "sha256:bf4005b89e044c471beb69e0e391a50db24ace117abfc7cc80625d0a04598b74"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#linkInWalkOrder",
       "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
       "name": "linkInWalkOrder",
@@ -147043,6 +147153,17 @@
       "shapeHash": "sha256:21e1a454cc882694ae50d3d5d422db2e863d4880a8771eb82461f1230e791032"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#newCallerFetch",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "newCallerFetch",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(ctx context.Context, client *net/http.Client) *callerFetch"
+      },
+      "shapeHash": "sha256:32d27d4b88c07e65723538fcbfa6c3f1e3ca458755f822ee9a5ed5ee31b0d49b"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#newChannelPayload",
       "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
       "name": "newChannelPayload",
@@ -147096,6 +147217,17 @@
         "type": "func() (*fusedHostConn, *fusedExtConn)"
       },
       "shapeHash": "sha256:e099360d26dd51157871ff031c4a728e80e57d6eee2208fe53f471f442693ace"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#newLegacyStreamCallback",
+      "package": "github.com/MichaelKinsy/PiG/coding/extension/host/subprocess",
+      "name": "newLegacyStreamCallback",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(ctx context.Context, options github.com/MichaelKinsy/PiG/ai.StreamOptions, model *github.com/MichaelKinsy/PiG/ai.Model, fetch *callerFetch) nativeProviderCallback"
+      },
+      "shapeHash": "sha256:5b8d67c852722229d3fa2eea1ed01fac82cbffc1875810217415710ca200304c"
     },
     {
       "id": "go:github.com/MichaelKinsy/PiG/coding/extension/host/subprocess#newLoadError",
@@ -186984,6 +187116,17 @@
       "shapeHash": "sha256:eeb3f652c39e11ab523eed8df3a1ddb724754eda3abde4fafc23678a62e3d414"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#AnthropicMessagesAPI",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "AnthropicMessagesAPI",
+      "kind": "function",
+      "exported": true,
+      "shape": {
+        "type": "func(ctx Context) ProviderStreams"
+      },
+      "shapeHash": "sha256:9607afc420a8c54338b8043fa25e68f32cc409223852908b4d35410371899d89"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#ArgumentCompletionsFunc",
       "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
       "name": "ArgumentCompletionsFunc",
@@ -196675,6 +196818,17 @@
       "shapeHash": "sha256:fae7d424bbfd165c6534b73eb6c0e74f9aa3ec74dd1d970ee7c4c26a2aef24fb"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#ModelRegistry.startModelStream",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "ModelRegistry.startModelStream",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(ctx context.Context, runtime string, model map[string]any, request map[string]any, options map[string]any, simple bool, apiRequest bool) *ModelEventStream"
+      },
+      "shapeHash": "sha256:ef0496bbf9806d4210defc378ca4b0596eccb72ce89888cbe1ee5edcf285c69d"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#ModelRegistry.state",
       "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
       "name": "ModelRegistry.state",
@@ -198114,6 +198268,17 @@
         "type": "OnPayloadFunc"
       },
       "shapeHash": "sha256:8af36a34dd78ecae4d4dd291986ad4314ae19a25e7d15edb7c85e1f07e8b971a"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#OnProviderStreamEventFunc",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "OnProviderStreamEventFunc",
+      "kind": "type",
+      "exported": true,
+      "shape": {
+        "type": "OnProviderStreamEventFunc"
+      },
+      "shapeHash": "sha256:960ace9a1773069a5d57dd1bd07f55938610805d56b1e6a41ef4434a491d973f"
     },
     {
       "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#OnResponseFunc",
@@ -209226,6 +209391,50 @@
       "shapeHash": "sha256:7eabd192b9f1c379102c8dc793881875f1f949f6b752e15a20b93080cb0b311d"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#callerFetchBody",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "callerFetchBody",
+      "kind": "type",
+      "exported": false,
+      "shape": {
+        "type": "callerFetchBody"
+      },
+      "shapeHash": "sha256:39393d7bc3d2bb721e6c36264e96a8a412dffa21558268fc6a6aeb541a615d95"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#callerFetchBody.Close",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "callerFetchBody.Close",
+      "kind": "function",
+      "exported": true,
+      "shape": {
+        "type": "func() error"
+      },
+      "shapeHash": "sha256:6af1cd6889de8772da28bb1f2998d0262659331d5ba93f6bf1933b49a3efd5e9"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#callerFetchBody.Read",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "callerFetchBody.Read",
+      "kind": "function",
+      "exported": true,
+      "shape": {
+        "type": "func(buffer []byte) (int, error)"
+      },
+      "shapeHash": "sha256:830c6e723ab71d1df6b0832bce01449322efd5eaea77e825b254fb0fe1fc7ba7"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#callerFetchFunc",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "callerFetchFunc",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(call func(string, any) (encoding/json.RawMessage, error)) ModelFetchFunc"
+      },
+      "shapeHash": "sha256:7339ca4f1253bcf365f0ce84ddb9a3afc5e07f4a7df44c75b6508f19ff346ab3"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#cancelMsg",
       "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
       "name": "cancelMsg",
@@ -209257,6 +209466,17 @@
         "type": "func() string"
       },
       "shapeHash": "sha256:31cac5b359d9888bdbe3fe08c486b2e404a728edce6e0aaaa60e59ceafc92fb5"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#cancelled",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "cancelled",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(ctx context.Context) bool"
+      },
+      "shapeHash": "sha256:fc0dd2d848a6581066bfa5c671132f84e440ea0bb1dc9d4dd705548b9f82b6e3"
     },
     {
       "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#capturesViewportInput",
@@ -212658,6 +212878,17 @@
       "shapeHash": "sha256:ff8d6594a4ae0e29b85e006f49cd4739342bef92a67af6c3186887eac2e3ea4e"
     },
     {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#legacyStreamCallbacks",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "legacyStreamCallbacks",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(ctx Context, provider string, names []string, options map[string]any)"
+      },
+      "shapeHash": "sha256:a21d7e23ea3c0ffce0e399ff05940ffc5f50429658a9021f0e18b68f081be9d1"
+    },
+    {
       "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#listenersOf",
       "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
       "name": "listenersOf",
@@ -214075,6 +214306,17 @@
         "type": "func(text []byte) ([]byte, map[rune]bool, func([]byte) []byte)"
       },
       "shapeHash": "sha256:009a60372b0d49e077466f08569d33019eb24b8f215a26c95c2f9ca050a5f86b"
+    },
+    {
+      "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#providerAPIStreams",
+      "package": "github.com/MichaelKinsy/PiG/extensions/sdk",
+      "name": "providerAPIStreams",
+      "kind": "function",
+      "exported": false,
+      "shape": {
+        "type": "func(ctx Context) ProviderStreams"
+      },
+      "shapeHash": "sha256:9607afc420a8c54338b8043fa25e68f32cc409223852908b4d35410371899d89"
     },
     {
       "id": "go:github.com/MichaelKinsy/PiG/extensions/sdk#providerArg",

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 
 	"github.com/MichaelKinsy/PiG/ai"
 	"github.com/MichaelKinsy/PiG/coding/extension"
@@ -108,8 +109,9 @@ func (h *Host) providerStreamCallback(me *managedExt, name string) extension.Pro
 			_ = stream.Push(ai.ErrorEvent{Reason: reason, Error: &ai.AssistantMessage{API: model.ProviderMeta.API, Provider: model.ProviderMeta.ProviderID, Model: model.ID, Content: []ai.AssistantContentBlock{}, StopReason: reason, ErrorMessage: err.Error()}})
 			cancel()
 		}
+		callbacks := legacyStreamCallbackNames(options)
 		//portlint:allow mapkeyorder the positional arguments of provider.stream(model, context, options) (models.ts:213), which the runtime reads by name; the model object inside keeps Pi's member order
-		args, err := json.Marshal(map[string]any{"model": extension.ModelValue{Model: model}, "context": map[string]any{"messages": transcript.Messages()}, "options": encodeProviderOptions(options)})
+		args, err := json.Marshal(map[string]any{"model": extension.ModelValue{Model: model}, "context": map[string]any{"messages": transcript.Messages()}, "options": encodeProviderOptions(options), "callbacks": callbacks})
 		if err != nil {
 			fail(err)
 			return stream
@@ -119,9 +121,19 @@ func (h *Host) providerStreamCallback(me *managedExt, name string) extension.Pro
 			fail(fmt.Errorf("provider %q extension is disconnected", name))
 			return stream
 		}
+		env := &Envelope{Type: MsgRequest, ID: "r" + strconv.FormatUint(conn.nextID.Add(1), 10), Request: &RequestPayload{Method: RequestProviderStream, Tool: name, Args: args}}
+		// The caller's function-valued options stay in this process; the extension calls them through provider.callback with this request as its parent, until the request ends.
+		var fetch *callerFetch
+		release := func() {}
+		if len(callbacks) > 0 {
+			fetch = newCallerFetch(ctx, options.Fetch)
+			release = h.addLegacyStreamCallback(conn, env.ID, newLegacyStreamCallback(ctx, options, model, fetch))
+		}
 		if !conn.startProducerTask(func() {
 			defer cancel()
-			response, err := conn.requestWithUpdates(ctx, &Envelope{Type: MsgRequest, Request: &RequestPayload{Method: RequestProviderStream, Tool: name, Args: args}}, func(raw json.RawMessage) {
+			defer fetch.close()
+			defer release()
+			response, err := conn.requestWithUpdates(ctx, env, func(raw json.RawMessage) {
 				event, err := decodeNativeProviderEvent(raw)
 				if err == nil {
 					err = stream.Push(event)
@@ -149,6 +161,8 @@ func (h *Host) providerStreamCallback(me *managedExt, name string) extension.Pro
 			}
 			stream.End(&result)
 		}) {
+			release()
+			fetch.close()
 			fail(fmt.Errorf("provider %q extension is closing", name))
 		}
 		return stream

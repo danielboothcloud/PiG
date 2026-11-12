@@ -396,6 +396,19 @@ func (h *Host) handleProviderPublication(ctx context.Context, conn *Conn, call *
 	if err := json.Unmarshal(call.Args, &args); err != nil {
 		return nil, err
 	}
+	if legacy := h.legacyStreamCallback(conn, call.ParentRequestID); legacy != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		result, err := legacy(call.Args)
+		if err != nil {
+			return nil, err
+		}
+		if len(result) == 0 {
+			result = json.RawMessage("null")
+		}
+		return &CallResultPayload{Result: result}, nil
+	}
 	h.mu.Lock()
 	p := h.nativeProviders[conn][args.Provider]
 	if p == nil {

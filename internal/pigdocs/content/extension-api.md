@@ -48,6 +48,26 @@ A host `request` is awaited: the Go SDK already executes its handler on a dedica
 
 The host rejects empty names, duplicate names within any list, schemas that do not parse as JSON, and provider configs that are not JSON-serializable.
 
+## Built-in Anthropic transport
+
+Use the raw API factory when a registered provider wraps the built-in transport. Do not call the registry again for that same provider: it dispatches back to your own `streamSimple`.
+
+```go
+api := sdk.AnthropicMessagesAPI(ctx)
+stream, err := api.StreamSimple(model, transcript, sdk.ProviderStreamOptions{
+    Signal: signal,
+    Values: map[string]any{"apiKey": key, "fetch": sdk.ModelFetchFunc(fetch)},
+    OnPayload: onPayload,
+    OnResponse: onResponse,
+})
+```
+
+`Stream` and `StreamSimple` return immediately. Read provider failures from the stream's error event or `Result()`. The `modelStream` wire call sets `apiRequest: true` to bypass registered callbacks and uses the supplied model endpoint and credential. Cancellation uses `Signal` and the `cancelModelStream` call; a `Signal` already cancelled ends the stream as aborted and sends nothing. `OnProviderStreamEvent` is forwarded as well.
+
+Python: `pig_sdk.anthropic_messages_api(ctx).stream_simple(model, transcript, pig_sdk.ProviderStreamOptions(values=..., signal=..., on_payload=...))`. Node: Pi's own `anthropicMessagesApi()` from `@earendil-works/pi-ai/compat`. Rust and Lisp do not have it yet.
+
+A provider registered with `streamSimple` receives the caller's request callbacks in its options, as Pi's composer passes them: Go `options["onPayload"]` (`sdk.OnPayloadFunc`), `"onResponse"` (`sdk.OnResponseFunc`), `"onProviderStreamEvent"` (`sdk.OnProviderStreamEventFunc`) and `"fetch"` (`sdk.ModelFetchFunc`); Node and Python get functions under the same keys. Compose the caller's `onPayload` before your own change and pass the rest through to the transport, or other extensions' request hooks stop working. They call back into the host and work only while the provider request runs. Rust and Lisp providers do not receive them yet.
+
 ## Host API (extension → host)
 
 These are the call names the host accepts. SDK bindings wrap each into a method on the per-call `Context`. Cancellation is propagated automatically - when a handler's `Context` is cancelled, all in-flight host calls made by that handler are also cancelled.

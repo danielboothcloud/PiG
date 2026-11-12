@@ -1,4 +1,5 @@
 import { modelFetchCallbacks } from "./model-fetch.mjs";
+import { legacyStreamCallbacks } from "./legacy-stream-callbacks.mjs";
 import { AutocompleteRuntime } from "./autocomplete.mjs";
 import { dispatchFacet, dispatchFacetSync, hasFacetBridge } from "./facet-bridge.mjs";
 import { syncTerminalGeometry } from "./terminal-geometry.mjs";
@@ -4808,9 +4809,9 @@ export class Runtime {
         case "provider_stream_simple": {
           const callback = this.providerStreams.get(request.tool);
           if (!callback) throw new Error(`unknown provider stream: ${request.tool}`);
-          const {model, context, options} = request.args;
-          // Pi's composer calls extension.streamSimple with the effective registered root as its receiver (provider-composer.ts:500-501).
-          const stream = await callback.call(this.registeredProviderConfig(request.tool), model, context, {...options, signal:ctx[requestSignal]});
+          const {model, context, options, callbacks} = request.args;
+          // Pi's composer calls extension.streamSimple with the effective registered root as its receiver and the caller's options object, function members included (provider-composer.ts:500-501).
+          const stream = await callback.call(this.registeredProviderConfig(request.tool), model, context, {...options, ...legacyStreamCallbacks(this, request.tool, id, callbacks), signal:ctx[requestSignal]});
           for await (const event of stream) {
             if (ctx[requestSignal].aborted) throw new Error("provider stream aborted");
             const accepted = this.conn.send({type:"notify", notify:{method:"provider_stream_event",args:{request_id:id,result:event}}});
@@ -5315,9 +5316,9 @@ export class Runtime {
     // An AbortSignal (upstream options.signal) cannot cross the process
     // boundary: its abort cancels the host request instead, and the provider
     // ends the stream as upstream does for an aborted request.
-    const { signal, onPayload, onResponse, transformHeaders, fetch, ...requestOptions } = options ?? {};
+    const { signal, onPayload, onResponse, onProviderStreamEvent, transformHeaders, fetch, ...requestOptions } = options ?? {};
     const fetchCallbacks = typeof fetch === "function" ? modelFetchCallbacks(fetch, signal) : {};
-    const callbacks = { model, onPayload, onResponse, transformHeaders, ...fetchCallbacks };
+    const callbacks = { model, onPayload, onResponse, onProviderStreamEvent, transformHeaders, ...fetchCallbacks };
     this.modelStreamCallbacks.set(streamId, callbacks);
     let onAbort;
     if (signal && typeof signal.addEventListener === "function") {
@@ -5337,7 +5338,7 @@ export class Runtime {
       this.modelStreamCallbacks.delete(streamId);
       if (onAbort) signal.removeEventListener("abort", onAbort);
     };
-    void this.call("modelStream", { streamId, model, simple, apiRequest, fetch: typeof fetch === "function", onPayload: typeof onPayload === "function", onResponse: typeof onResponse === "function", transformHeaders: typeof transformHeaders === "function", request: { ...context, ...requestOptions } }).then(
+    void this.call("modelStream", { streamId, model, simple, apiRequest, fetch: typeof fetch === "function", onPayload: typeof onPayload === "function", onResponse: typeof onResponse === "function", onProviderStreamEvent: typeof onProviderStreamEvent === "function", transformHeaders: typeof transformHeaders === "function", request: { ...context, ...requestOptions } }).then(
       () => setImmediate(() => settle()),
       (error) => setImmediate(() => settle(error)),
     );

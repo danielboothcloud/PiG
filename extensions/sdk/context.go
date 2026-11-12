@@ -1665,6 +1665,10 @@ func (r ModelRegistry) streamOn(runtime string, model, request, options map[stri
 
 // streamOnContext is streamOn whose provider request a cancelled ctx aborts. The cancelModelStream call follows the modelStream frame on the same request lane, so the host has registered the stream before it reads the cancellation.
 func (r ModelRegistry) streamOnContext(ctx context.Context, runtime string, model, request, options map[string]any, simple bool) *ModelEventStream {
+	return r.startModelStream(ctx, runtime, model, request, options, simple, false)
+}
+
+func (r ModelRegistry) startModelStream(ctx context.Context, runtime string, model, request, options map[string]any, simple, apiRequest bool) *ModelEventStream {
 	stream := newModelEventStream()
 	streamID := fmt.Sprintf("model-stream-%d", r.context.ext.modelStreamSeq.Add(1))
 	r.context.ext.modelStreamsMu.Lock()
@@ -1685,6 +1689,9 @@ func (r ModelRegistry) streamOnContext(ctx context.Context, runtime string, mode
 	}
 	go func() {
 		call := map[string]any{"streamId": streamID, "model": model, "request": merged, "simple": simple}
+		if apiRequest {
+			call["apiRequest"] = true
+		}
 		if runtime != "" {
 			call["runtime"] = runtime
 		}

@@ -1794,6 +1794,7 @@ func decodeSubprocessStream(ctx context.Context, llmModel *ai.Model, request map
 	options.OnPayload = bridgeRequest.OnPayload
 	options.OnResponse = bridgeRequest.OnResponse
 	options.TransformHeaders = bridgeRequest.TransformHeaders
+	options.OnProviderStreamEvent = bridgeRequest.OnProviderStreamEvent
 	return ctx, ai.Context{SystemPrompt: systemPrompt, Messages: messages, Tools: tools}, options, nil
 }
 

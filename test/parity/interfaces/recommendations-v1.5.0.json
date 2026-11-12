@@ -48926,22 +48926,24 @@
     {
       "id": "pkg:ai/api/anthropic-messages.lazy#anthropicMessagesApi",
       "upstreamShapeHash": "sha256:7521c4223f170766ccb1836bb2529fb618db465dc6b8ded48386b236d9fec8f0",
-      "recommendedDisposition": "partial",
+      "recommendedDisposition": "pending",
       "confidence": "low",
       "basis": [
-        "Exactly one normalized declared Go symbol name matches; package context, semantic shape, and production closure remain unverified."
+        "2 normalized-name Pig candidates are ambiguous."
       ],
       "alternatives": [
         "ported",
-        "pending",
+        "partial",
         "deferred",
         "designed-out",
         "divergence"
       ],
       "pigCandidates": [
-        "go:github.com/MichaelKinsy/PiG/ai#AnthropicMessagesAPI"
+        "go:github.com/MichaelKinsy/PiG/ai#AnthropicMessagesAPI",
+        "go:github.com/MichaelKinsy/PiG/extensions/sdk#AnthropicMessagesAPI"
       ],
       "missingClosure": [
+        "candidate-disambiguation",
         "shape-translation-review",
         "production-reachability",
         "required-layers",
@@ -101497,22 +101499,24 @@
     {
       "id": "pkg:ai/compat#anthropicMessagesApi",
       "upstreamShapeHash": "sha256:7521c4223f170766ccb1836bb2529fb618db465dc6b8ded48386b236d9fec8f0",
-      "recommendedDisposition": "partial",
+      "recommendedDisposition": "pending",
       "confidence": "low",
       "basis": [
-        "Exactly one normalized declared Go symbol name matches; package context, semantic shape, and production closure remain unverified."
+        "2 normalized-name Pig candidates are ambiguous."
       ],
       "alternatives": [
         "ported",
-        "pending",
+        "partial",
         "deferred",
         "designed-out",
         "divergence"
       ],
       "pigCandidates": [
-        "go:github.com/MichaelKinsy/PiG/ai#AnthropicMessagesAPI"
+        "go:github.com/MichaelKinsy/PiG/ai#AnthropicMessagesAPI",
+        "go:github.com/MichaelKinsy/PiG/extensions/sdk#AnthropicMessagesAPI"
       ],
       "missingClosure": [
+        "candidate-disambiguation",
         "shape-translation-review",
         "production-reachability",
         "required-layers",

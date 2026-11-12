@@ -330,15 +330,17 @@ const CallProviderCallback = "provider.callback"
 // ModelStreamCall invokes a registry stream or an already-resolved API leaf.
 // Callback capabilities remain scoped to StreamID and the originating connection.
 type ModelStreamCall struct {
-	StreamID         string          `json:"streamId"`
-	Simple           bool            `json:"simple,omitempty"`
-	APIRequest       bool            `json:"apiRequest,omitempty"`
-	Fetch            bool            `json:"fetch,omitempty"`
-	OnPayload        bool            `json:"onPayload,omitempty"`
-	OnResponse       bool            `json:"onResponse,omitempty"`
-	TransformHeaders bool            `json:"transformHeaders,omitempty"`
-	Model            map[string]any  `json:"model"`
-	Request          json.RawMessage `json:"request"`
+	StreamID         string `json:"streamId"`
+	Simple           bool   `json:"simple,omitempty"`
+	APIRequest       bool   `json:"apiRequest,omitempty"`
+	Fetch            bool   `json:"fetch,omitempty"`
+	OnPayload        bool   `json:"onPayload,omitempty"`
+	OnResponse       bool   `json:"onResponse,omitempty"`
+	TransformHeaders bool   `json:"transformHeaders,omitempty"`
+	// OnProviderStreamEvent advertises the caller's onProviderStreamEvent observer (types.ts StreamOptions.onProviderStreamEvent).
+	OnProviderStreamEvent bool            `json:"onProviderStreamEvent,omitempty"`
+	Model                 map[string]any  `json:"model"`
+	Request               json.RawMessage `json:"request"`
 	// Runtime names the session graph ModelRuntime the stream runs on (CallSessionGraphNew, kind ModelRuntime); empty is the Session's.
 	Runtime string `json:"runtime,omitempty"`
 }

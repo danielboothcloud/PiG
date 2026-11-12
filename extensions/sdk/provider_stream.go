@@ -20,10 +20,18 @@ func (e *Extension) dispatchProviderStream(ctx Context, id string, request *requ
 		Model   map[string]any `json:"model"`
 		Context map[string]any `json:"context"`
 		Options map[string]any `json:"options"`
+		// Callbacks names the caller's function-valued request options; the host serves them through provider.callback while this request runs.
+		Callbacks []string `json:"callbacks"`
 	}
 	if err := json.Unmarshal(request.Args, &args); err != nil {
 		_ = e.conn.respond(id, nil, err)
 		return
+	}
+	if len(args.Callbacks) > 0 {
+		if args.Options == nil {
+			args.Options = map[string]any{}
+		}
+		legacyStreamCallbacks(ctx, request.Tool, args.Callbacks, args.Options)
 	}
 	stream, err := handler(ctx, args.Model, args.Context, args.Options)
 	if err != nil {
