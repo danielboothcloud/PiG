@@ -138,6 +138,7 @@ func newSubprocessExtensionHost(cwd string, mode extension.ExtensionMode, regist
 	installStartupTrace(&trace, host.SetStartupTrace)
 	host.SetMode(string(mode))
 	host.SetHostInfo(extensionHostInfo())
+	host.SetLaunchTerminals(launchTerminals())
 	subprocess.SetClipboardCopier(codingagent.CopyToClipboard)
 	// Refuse to compile an extension against a staged SDK that does not match
 	// this binary. Without it a stale stage silently reintroduces bugs the
@@ -321,6 +322,11 @@ func flushExtensionHostRegistrations(host *subprocess.Host, registry *coding.Mod
 
 // extensionHostInfo is Pi's getAgentDir(), CONFIG_DIR_NAME, VERSION, getPackageDir() and default getShellConfig() as this process resolves them, which every extension
 // process starts with. An unresolvable home directory leaves the agent directory empty and the SDKs report it as unavailable.
+// launchTerminals is whether pig's stdin and stdout were terminals when it started. Main reads it before the output guard of print, JSON and RPC mode replaces os.Stdout, and later calls return that first answer.
+var launchTerminals = sync.OnceValue(func() subprocess.LaunchTerminals {
+	return subprocess.LaunchTerminals{Stdin: term.IsTerminal(int(os.Stdin.Fd())), Stdout: term.IsTerminal(int(os.Stdout.Fd()))}
+})
+
 func extensionHostInfo() subprocess.HostInfo {
 	agentDir, _ := codingagent.ResolveAgentDir()
 	return subprocess.HostInfo{AgentDir: agentDir, ConfigDirName: codingagent.ConfigDirName(), Version: coding.UpstreamPackageVersion, PackageDir: extensionPackageDir(), Shell: sync.OnceValue(extensionShellInfo)}

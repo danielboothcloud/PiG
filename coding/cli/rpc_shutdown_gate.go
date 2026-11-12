@@ -10,8 +10,10 @@ import "sync"
 // The check runs as a macrotask of the stdin executor (rpcResponseTurn), which is Pi's check phase: after the microtasks of the stdin iteration that is running. Every caller hands the scheduling to an owned task and returns at once, so that an extension's synchronous host call (a Go, Python, Rust or Lisp ctx.shutdown()) is answered before the check can run on its goroutine and wait for the session_shutdown handlers: Pi's setImmediate is a deferral nobody waits for.
 // pig divergence (D231): follows Pi main 1708b4788 ahead of the v1.5.0 pin; Pi 1.5.0 only checks the request after a stdin command and at agent_settled.
 type rpcShutdownGate struct {
-	mu         sync.Mutex
-	requested  bool
+	mu        sync.Mutex
+	requested bool
+	// exitCode is the exit status of the last shutdownWithCode request (D236); 0 when only ctx.shutdown() asked.
+	exitCode   int
 	inputReady bool
 	active     int
 	// spawn runs fn on an owned task; schedule runs fn on the executor's next tick; idle is session.isIdle; started reports that shutdown() began; fire starts it.
@@ -37,6 +39,22 @@ func (g *rpcShutdownGate) Request() {
 	g.requested = true
 	g.mu.Unlock()
 	g.Check()
+}
+
+// RequestWithCode is the extension's shutdownWithCode: Request with the exit status the process ends with.
+// pig divergence (D236): Pi extensions end startup with process.exit(code).
+func (g *rpcShutdownGate) RequestWithCode(code int) {
+	g.mu.Lock()
+	g.exitCode = code
+	g.mu.Unlock()
+	g.Request()
+}
+
+// ExitCode is the exit status the last RequestWithCode asked for.
+func (g *rpcShutdownGate) ExitCode() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.exitCode
 }
 
 // InputReady marks the input reader attached and checks a request made during startup.

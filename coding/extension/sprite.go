@@ -65,6 +65,12 @@ type TerminalBeller interface {
 	Bell()
 }
 
+// TerminalWriter is a UI with a terminal that takes an extension's control strings: WriteTerminal queues data to be written between frames. The host has validated data so that it neither prints nor moves the cursor. A UI without a terminal (print, JSON and RPC modes) does not implement it.
+// pig divergence (D237): a Pi extension writes these strings to process.stdout.
+type TerminalWriter interface {
+	WriteTerminal(data string)
+}
+
 // ValidateSpriteDefinition validates and defensively copies a sprite definition. The grids, palette and text follow the
 // login definition's rules (ValidateLoginDefinition); the name has the login name's width and the tagline the login
 // tagline's.

@@ -243,6 +243,12 @@ type InteractiveMode struct {
 	requestExit    atomic.Bool // /quit / /exit sets this; input loop notices and returns. Atomic: extension shutdown may set it off the owner loop.
 	fatalRuntime   atomic.Bool // fatal session replacement errors exit 1 after the input loop restores the terminal.
 
+	// exitCode is the exit status an extension's shutdownWithCode asked for, and exitCodeSet reports that one did (RequestedExitCode). pig divergence (D236).
+	exitCode    atomic.Int32
+	exitCodeSet atomic.Bool
+	// relaunchRequested reports that an extension's relaunch was accepted (D238).
+	relaunchRequested atomic.Bool
+
 	// suspended is true while the session is parked by SIGTSTP. SIGINT is
 	// ignored then, mirroring upstream's ignoreSigint listener.
 	suspended atomic.Bool
@@ -1234,6 +1240,10 @@ type InteractiveModeOptions struct {
 	// TerminateExtensionProcesses, when set, kills every extension process without running extension callbacks. It runs before an emergency exit on a dead terminal, which skips orderly shutdown.
 	TerminateExtensionProcesses func()
 
+	// Relaunch accepts an extension's relaunch of pig with other arguments and environment, or returns why the process cannot restart. The mode shuts down after it accepts; the caller replaces the process image once Run returns.
+	// pig divergence (D238): a Pi extension relaunches Pi by spawning a child on the terminal.
+	Relaunch func(subprocess.RelaunchRequest) error
+
 	// StageExtensionSDKs, when non-nil, materializes the SDKs this binary
 	// embeds before /reload recompiles out-of-tree extensions, and prunes
 	// builds whose fingerprint proves they came from an older SDK.
@@ -1928,12 +1938,19 @@ func (m *InteractiveMode) run(ctx context.Context) error {
 	stopResize := m.installResizeHandler(ctx)
 	m.onStop(func() error { stopResize(); return nil })
 
-	// Auto-submit initial message (positional arg / piped
-	// stdin) once the TUI is up. Mirrors upstream's initial-message
-	// dispatch in coding-agent/cli/initial-message.ts: the message
-	// is fed through the same handleSubmit path the user's keystrokes
-	// hit, so transcript rendering / session writes / extension
-	// hooks all see it identically.
+	m.submitStartupMessages(ctx)
+	mark("interactive-ready")
+	m.frontendInputReady()
+	return m.inputLoop(ctx, os.Stdin)
+}
+
+// submitStartupMessages auto-submits the initial message (positional arg / piped stdin) once the TUI is up, then the later positional messages in order. Mirrors upstream's initial-message dispatch in coding-agent/cli/initial-message.ts: the message is fed through the same handleSubmit path the user's keystrokes hit, so transcript rendering, session writes and extension hooks all see it identically. It runs on the owner loop.
+func (m *InteractiveMode) submitStartupMessages(ctx context.Context) {
+	// pig divergence (D236): Pi extensions end startup with process.exit(code), so an exit status requested while the session started sends no initial message.
+	// pig divergence (D238): a relaunch requested while the session started leaves the command-line prompt to the relaunched pig.
+	if m.exitCodeSet.Load() || m.relaunchRequested.Load() {
+		return
+	}
 	if strings.TrimSpace(m.opts.InitialMessage) != "" || len(m.opts.InitialImages) > 0 {
 		m.handleSubmitWithImages(ctx, m.opts.InitialMessage, m.opts.InitialImages)
 	}
@@ -1945,7 +1962,4 @@ func (m *InteractiveMode) run(ctx context.Context) error {
 			m.submitInitialMessages(ctx, m.opts.InitialMessages)
 		})
 	}
-	mark("interactive-ready")
-	m.frontendInputReady()
-	return m.inputLoop(ctx, os.Stdin)
 }

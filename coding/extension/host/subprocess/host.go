@@ -335,6 +335,8 @@ type Host struct {
 	harnessArgvOnce sync.Once
 	harnessArgvPath string
 	harnessArgvErr  error
+	// launchTerminals is whether pig's stdin and stdout were terminals at launch (CallHostLaunch).
+	launchTerminals LaunchTerminals
 
 	// sockRuntime is a per-Host directory holding this instance's extension
 	// sockets, created lazily under socketDir. Isolating sockets per Host keeps
@@ -768,6 +770,7 @@ func NewHostWithConfigRoot(cwd, configRoot string) *Host {
 		socketDir:             resolveSocketDir(),
 		harnessBinary:         harnessExecutable(),
 		harnessArgs:           slices.Clone(os.Args[1:]),
+		launchTerminals:       currentLaunchTerminals(),
 		exts:                  make(map[string]*managedExt),
 		loadOrder:             make(map[string]int),
 		builder:               NewBuilderWithConfigRoot(cacheDir, configRoot),

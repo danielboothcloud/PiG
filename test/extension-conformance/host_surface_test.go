@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net"
 	"reflect"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,17 +22,31 @@ import (
 
 // The host-surface rows (SdkCore3Plus): OnThemeChange, OnToolsExpandedChange, SetWidgetRenderer, Bell, ToolCallIndex, ToolInput and ToolParams, ExtensionSourceInfo, OnLoaded and a factory-time events.emit, in every SDK against the real subprocess Host. The Go fixture (testfixture/modeltypes/host_surface.go), the Rust fixture (testdata/modeltypes-rust), the Python fixture (model_types_test.go) and the Node fixture (testdata/model-types.mjs) carry the same tools, so one table of rows proves each SDK. Every value a row asserts is one the host or the fixture's own logic produces and no SDK fallback can: the theme the host switched to, the state the host toggled, the width it announced, the bell count its UI recorded, the batch position and argument order the agent loop produced.
 
-// hostSurfaceUI is the interactive UI of the rows: a tool-expansion state the test toggles and a count of the bells it was asked to ring.
+// hostSurfaceUI is the interactive UI of the rows: a tool-expansion state the test toggles, a count of the bells it was asked to ring, and the terminal writes it received.
 type hostSurfaceUI struct {
 	extension.UIContext
 	expanded atomic.Bool
 	bells    atomic.Int32
+	writesMu sync.Mutex
+	writes   []string
 }
 
 func newHostSurfaceUI() *hostSurfaceUI { return &hostSurfaceUI{UIContext: extension.NoopUIContext} }
 
 func (u *hostSurfaceUI) GetToolsExpanded() bool { return u.expanded.Load() }
 func (u *hostSurfaceUI) Bell()                  { u.bells.Add(1) }
+
+func (u *hostSurfaceUI) WriteTerminal(data string) {
+	u.writesMu.Lock()
+	u.writes = append(u.writes, data)
+	u.writesMu.Unlock()
+}
+
+func (u *hostSurfaceUI) terminalWrites() []string {
+	u.writesMu.Lock()
+	defer u.writesMu.Unlock()
+	return slices.Clone(u.writes)
+}
 
 // hostSurfaceSource is the SourceInfo the rows load every fixture with.
 var hostSurfaceSource = extension.SourceInfo{Path: "/c3/source/entry", Source: "local", Scope: "project", Origin: "package", BaseDir: "/c3/source", ChangelogPath: "/c3/source/CHANGELOG.md"}
@@ -200,6 +216,36 @@ func TestBellAcrossSDKs(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		if got := ui.bells.Load(); got != 2 {
 			t.Fatalf("bells = %d, want 2", got)
+		}
+	})
+}
+
+// ctx.WriteTerminal: the interactive UI receives the data byte for byte; data that would print or move the cursor is refused whole, and without a terminal UI the call writes nothing and returns the host's error naming the mode (D237). The error texts are the host's, so an SDK that drops the call or invents its own result fails.
+func TestWriteTerminalAcrossSDKs(t *testing.T) {
+	// OSC 777 with a non-ASCII title, then kitty's OSC 99 pair inside tmux's passthrough, then BEL: an SDK that re-encodes, escapes or truncates the string changes the bytes the UI records.
+	notify := "\x1b]777;notify;Pi · Finished;Session — done\x07\x1bPtmux;\x1b\x1b]99;i=aio:d=0;Pi\x1b\x1b\\\x1b\x1b]99;i=aio:p=body;done\x1b\x1b\\\x1b\\\x07"
+	write := func(r *modelTypesRig, data string) string {
+		r.t.Helper()
+		outcome, _ := r.toolWith("c3_write_terminal", map[string]any{"data": data})["error"].(string)
+		return outcome
+	}
+	eachModelTypesPlacement(t, func(t *testing.T, r *modelTypesRig) {
+		// The rig runs in tui mode (conformanceMode) with no UI bound yet; print, JSON and RPC mode name themselves (TestWriteTerminalFailsWithoutATerminalUI, TestGoExtensionWriteTerminalFailsWithoutATerminal).
+		if got := write(r, notify); !strings.Contains(got, "the terminal UI is not running yet; nothing was written") {
+			t.Fatalf("write without a terminal UI = %q, want the host's no-terminal error", got)
+		}
+		ui := newHostSurfaceUI()
+		r.bridge.SetUIContext(ui)
+		if got := write(r, notify); got != "<nil>" {
+			t.Fatalf("write = %q", got)
+		}
+		if got := write(r, "\x1b[2J"+notify); !strings.Contains(got, "a CSI sequence") || !strings.Contains(got, "nothing was written") {
+			t.Fatalf("write of a CSI sequence = %q, want the host's refusal", got)
+		}
+		eventually(t, "the write", func() bool { return len(ui.terminalWrites()) == 1 })
+		time.Sleep(200 * time.Millisecond)
+		if got := ui.terminalWrites(); !slices.Equal(got, []string{notify}) {
+			t.Fatalf("terminal writes = %q, want only %q", got, notify)
 		}
 	})
 }

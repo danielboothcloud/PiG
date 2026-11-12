@@ -333,6 +333,8 @@ func (c Context) Tools() ([]AgentTool, error) {
 //
 // It never fails for tool failures: unknown tools, validation errors, blocked calls and thrown errors come back as an outcome with IsError set. The error is non-nil for a call outside a tool handler, unencodable arguments, or a host or transport failure. It is valid only inside a tool handler.
 //
+// This extension's tool_execution_start, tool_call, tool_execution_update, tool_result and tool_execution_end handlers for the nested call, OnUpdate, and the nested tool itself when this extension registered it, run before ExecuteTool returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
+//
 // upstream: types.ts:386-394 (executeTool), runner.ts:966-983
 func (c Context) ExecuteTool(name string, args any, options *ExecuteToolOptions) (AgentToolCallOutcome, error) {
 	if c.toolCallID == "" {

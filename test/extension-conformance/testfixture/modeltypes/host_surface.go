@@ -183,6 +183,31 @@ func registerHostSurface(e *sdk.Extension) {
 	tool("c3_bell", func(ctx sdk.Context, _ map[string]any) (any, error) {
 		return text(map[string]any{"error": fmt.Sprint(ctx.Bell())})
 	})
+	tool("c3_write_terminal", func(ctx sdk.Context, args map[string]any) (any, error) {
+		data, _ := args["data"].(string)
+		return text(map[string]any{"error": fmt.Sprint(ctx.WriteTerminal(data))})
+	})
+	tool("c3_relaunch", func(ctx sdk.Context, args map[string]any) (any, error) {
+		var options sdk.RelaunchOptions
+		if list, ok := args["args"].([]any); ok {
+			options.Args = make([]string, 0, len(list))
+			for _, arg := range list {
+				value, _ := arg.(string)
+				options.Args = append(options.Args, value)
+			}
+		}
+		if env, ok := args["env"].(map[string]any); ok {
+			options.Env = make(map[string]*string, len(env))
+			for key, value := range env {
+				if text, ok := value.(string); ok {
+					options.Env[key] = &text
+				} else {
+					options.Env[key] = nil
+				}
+			}
+		}
+		return text(map[string]any{"error": fmt.Sprint(ctx.Relaunch(options))})
+	})
 	tool("c3_tool_call", func(ctx sdk.Context, _ map[string]any) (any, error) {
 		var index any
 		if i, ok := ctx.ToolCallIndex(); ok {

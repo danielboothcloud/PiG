@@ -305,3 +305,25 @@ func TestInteractiveSendsEveryInitialMessageInOrder(t *testing.T) {
 		t.Fatalf("third request lacks the third message:\n%s", requests[2])
 	}
 }
+
+// An extension's ShutdownWithCode in session_start is Pi's process.exit(code): the positional prompts never reach the model (D236). The input loop can see the session_start phase end before it sees the shutdown request, so run() itself must not submit them. The control sends both.
+func TestInteractiveStartupSendsNoMessageAfterShutdownWithCode(t *testing.T) {
+	for _, requested := range []bool{false, true} {
+		pair := newSessionPair(t, `{"retry":{"enabled":false}}`, 100000, nil,
+			reply("one", ai.Usage{Input: 10, Output: 10}),
+			reply("two", ai.Usage{Input: 10, Output: 10}),
+		)
+		if requested {
+			pair.harness.MarkExitCodeRequested(1)
+		}
+		pair.harness.SubmitStartupMessages("first", []string{"second"})
+		pair.harness.WaitIdle(t, 10*time.Second)
+		want := 2
+		if requested {
+			want = 0
+		}
+		if got := len(pair.provider.requestLog()); got != want {
+			t.Fatalf("exit requested %v: model requests = %d, want %d", requested, got, want)
+		}
+	}
+}

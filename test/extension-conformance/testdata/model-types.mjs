@@ -319,6 +319,22 @@ function hostSurface(pi, tool) {
   });
   tool("c3_widget_clear", async (_id, _params, _signal, _update, ctx) => { ctx.ui.setWidget("c3w", undefined); return reply({ ok: true }); });
   tool("c3_bell", async (_id, _params, _signal, _update, ctx) => { ctx.ui.bell(); return reply({ error: "<nil>" }); });
+  tool("c3_write_terminal", async (_id, params, _signal, _update, ctx) => {
+    try {
+      await ctx.ui.writeTerminal(params.data);
+    } catch (error) {
+      return reply({ error: error.message });
+    }
+    return reply({ error: "<nil>" });
+  });
+  tool("c3_relaunch", async (_id, params, _signal, _update, ctx) => {
+    try {
+      await ctx.relaunch({ args: params.args, env: params.env });
+    } catch (error) {
+      return reply({ error: error.message });
+    }
+    return reply({ error: "<nil>" });
+  });
   tool("c3_tool_call", async (_id, params, _signal, _update, ctx) => reply({
     index: ctx.toolCallIndex ?? null, input: ctx.toolInput ?? null, keys: Object.keys(params), meta: params.meta === undefined ? null : JSON.stringify(params.meta),
   }));

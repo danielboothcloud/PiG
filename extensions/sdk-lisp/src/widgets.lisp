@@ -39,6 +39,10 @@
   "Ring the terminal bell of the interactive terminal between frames. Nothing happens where there is no terminal UI."
   (ctx-call-host ctx "ui.bell" (obj)) nil)
 
+(defun ctx-write-terminal (ctx data)
+  "Write terminal control strings DATA to the interactive terminal between TUI frames, what a Pi extension does with process.stdout.write. DATA must be BEL bytes, OSC strings other than OSC 8 hyperlinks, and tmux passthroughs of those, at most 64 KiB; anything else is refused whole. In print, JSON and RPC mode, which have no terminal UI, nothing is written and the host-call-error names the mode. pig divergence (D237)."
+  (ctx-call-host ctx "ui.writeTerminal" (obj "data" data)) nil)
+
 ;;; ---------------------------------------------------------------- renderers
 
 (defstruct (widget-surface (:constructor widget-make-surface (method render key options)))

@@ -19,7 +19,7 @@
    #:ctx-notify #:ctx-set-status #:ctx-clear-status #:ctx-set-title
    #:ctx-select #:ctx-confirm #:ctx-input #:ctx-editor
    #:ctx-exec #:exec-result #:exec-result-stdout #:exec-result-stderr #:exec-result-exit-code #:exec-result-killed #:exec-result-truncated
-   #:ctx-is-idle-p #:ctx-abort #:ctx-has-pending-messages-p #:ctx-shutdown #:ctx-compact #:ctx-reload
+   #:ctx-is-idle-p #:ctx-abort #:ctx-has-pending-messages-p #:ctx-shutdown #:ctx-relaunch #:ctx-compact #:ctx-reload
    #:ctx-get-flag #:ctx-get-system-prompt #:ctx-get-thinking-level #:ctx-get-all-tools #:ctx-get-active-tools
    #:ctx-send-message #:ctx-send-user-message #:ctx-append-entry #:ctx-set-session-name #:ctx-set-shared-env #:ctx-unset-shared-env
    #:ctx-call-host
@@ -359,7 +359,7 @@
    #:overlay-get-bounds
    ;; widgets, footer, header, working indicator
    #:ctx-width #:ctx-height #:ctx-set-working-message #:ctx-set-working-visible #:ctx-set-working-indicator
-   #:ctx-set-hidden-thinking-label #:ctx-set-tools-expanded #:ctx-bell
+   #:ctx-set-hidden-thinking-label #:ctx-set-tools-expanded #:ctx-bell #:ctx-write-terminal
    #:ctx-set-widget #:ctx-set-widget-renderer #:ctx-set-footer #:ctx-clear-footer #:ctx-set-footer-renderer #:ctx-set-footer-view
    #:ctx-set-header #:ctx-clear-header #:ctx-set-header-renderer #:ctx-set-header-view
    ;; theme

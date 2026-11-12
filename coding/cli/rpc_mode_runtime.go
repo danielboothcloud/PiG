@@ -108,8 +108,12 @@ type rpcHost struct {
 	forwarding atomic.Int32
 	// requestShutdown is an extension's ctx.shutdown(); shutdown counts the commands in flight, and afterSettled is where upstream checks for the request again (D231).
 	requestShutdown func()
-	shutdown        *rpcShutdownGate
-	afterSettled    func()
+	// requestShutdownWithCode is an extension's shutdownWithCode (D236).
+	requestShutdownWithCode func(code int)
+	shutdown                *rpcShutdownGate
+	afterSettled            func()
+	// relaunchInput excludes an extension's relaunch once the command reader attached (D238).
+	relaunchInput rpcRelaunchInput
 	// settle holds stdin between a published agent_end and agent_settled.
 	settle rpcSettleGate
 	// turns models where Pi's event loop turns (D189); loop reports the run's chain to it.
@@ -442,6 +446,15 @@ func (h *rpcHost) bindExtensionActions(session *coding.Session, st *rpcModeSessi
 			}, h.extensionRunStage, h.rt.ExtensionCommandActions)
 		if bridge != nil {
 			bridge.SetHostAction("shutdown", h.requestShutdown)
+			if h.requestShutdownWithCode != nil {
+				bridge.SetHostAction("shutdownWithCode", h.requestShutdownWithCode)
+			}
+			if h.requestShutdown != nil {
+				// pig divergence (D238): a relaunch is a shutdown request that replaces the process image afterwards.
+				bridge.SetHostAction("relaunch", func(request subprocess.RelaunchRequest) error {
+					return h.relaunchInput.request(request, h.requestShutdown)
+				})
+			}
 		}
 	}
 	var detach func()

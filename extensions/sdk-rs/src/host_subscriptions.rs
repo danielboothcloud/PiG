@@ -246,6 +246,11 @@ impl Context {
         crate::context::call_result_to_io(self.call_wire("ui.bell", None)?)
     }
 
+    /// Write terminal control strings to the interactive terminal between TUI frames, what a Pi extension does with `process.stdout.write`: OSC 777 or OSC 99 notifications, a window title, BEL. `data` must be a sequence of BEL bytes, OSC strings (`ESC ] ... BEL` or `ESC \`) other than OSC 8 hyperlinks, and tmux passthroughs (`ESC P tmux; ... ESC \`) of those, at most 64 KiB, so that it neither prints nor moves the cursor; anything else is refused whole. The write is queued before the call returns. In print, JSON and RPC mode, which have no terminal UI, it writes nothing and returns an error that names the mode. pig divergence (D237).
+    pub fn write_terminal(&self, data: &str) -> io::Result<()> {
+        crate::context::call_result_to_io(self.call_wire("ui.writeTerminal", Some(serde_json::json!({ "data": data })))?)
+    }
+
     /// The provenance the loader stamped on this extension: upstream's `extension.sourceInfo` (`types.ts` `SourceInfo`), where `ExtensionRunner.getExtensionPaths` reads the extension's path from. `path` is the entry file and `base_dir` the package root when the extension came from a Package; a Pi extension reads both from `import.meta.url`, which a subprocess extension has no equivalent of. `None` when the host holds no source for this extension.
     pub fn extension_source_info(&self) -> Option<SourceInfo> {
         self.host_subs.source_info.lock().unwrap().clone()

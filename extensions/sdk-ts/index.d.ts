@@ -109,6 +109,16 @@ declare module "@earendil-works/pi-coding-agent" {
     readonly toolCallIndex?: number;
     /** In a tool's `execute`: `JSON.stringify` of the call's arguments, members in the model's order. */
     readonly toolInput?: string;
+    /**
+     * End the runtime and restart pig in the same process, terminal and stdio with `args` (the complete argument list after
+     * the pig executable) and pig's environment changed by `env` (a string sets a variable; `null` or `undefined` removes it;
+     * `PIG_EXT_*` and `PIG_HARNESS_*` are refused). This replaces spawning `process.execPath` with stdio `"inherit"`, which in
+     * PiG starts a second pig on the extension's pipes. When `args` select no session, pig adds `--session <current file>`
+     * if that file exists. Resolves once pig accepted: it then shuts down as for `shutdown()` (`session_shutdown` reason
+     * `"quit"`) and replaces its process image. Rejects, and the runtime keeps running, on Windows, after pig read piped
+     * stdin, in RPC mode once pig reads commands, while pig shuts down, and when a relaunch is pending (pig divergence D238).
+     */
+    relaunch(options: { args: string[]; env?: Record<string, string | null | undefined> }): Promise<void>;
   }
   // Pi c466a359 (#11360) adds ExecOptions.maxBuffer and ExecResult.truncated. PiG's host implements them and this augmentation declares them.
   interface ExecOptions {
@@ -129,6 +139,12 @@ declare module "@earendil-works/pi-coding-agent" {
     onToolsExpandedChange(handler: (expanded: boolean) => void): () => void;
     /** Ring the terminal bell of the interactive terminal; nothing without a terminal UI. */
     bell(): void;
+    /**
+     * Write terminal control strings (BEL, OSC strings other than OSC 8, tmux passthroughs of those; at most 64 KiB) to the
+     * interactive terminal between TUI frames, as `process.stdout.write` does in Pi. Rejects, writing nothing, any other data and
+     * in print, JSON and RPC mode, which have no terminal UI (pig divergence D237).
+     */
+    writeTerminal(data: string): Promise<void>;
     /** Set PiG's native login template, or reject an invalid definition. */
     setLogin(definition: PiGLoginDefinition): Promise<void>;
     /**

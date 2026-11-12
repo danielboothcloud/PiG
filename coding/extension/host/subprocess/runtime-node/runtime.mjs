@@ -1640,6 +1640,13 @@ class RuntimeContext {
   // produced is painted (it drains input first), so a shutdown requested
   // from an editor's handleInput reaches the host after that frame.
   shutdown() { this.runtime.extensionRuntime.assertActive(); queueMicrotask(() => this.runtime.fireAndForget("shutdown", {})); }
+  // pig divergence (D238): a Pi extension relaunches Pi by spawning a child with stdio "inherit"; this process's stdio is the host wire, so the host restarts pig in its own process. An undefined or null env value removes the variable.
+  async relaunch(options = {}) {
+    this.runtime.extensionRuntime.assertActive();
+    const env = {};
+    for (const [key, value] of Object.entries(options?.env ?? {})) env[key] = value == null ? null : String(value);
+    await this.runtime.call("relaunch", { args: options?.args ?? [], env });
+  }
   getContextUsage() { this.runtime.extensionRuntime.assertActive(); return this.runtime.state.contextUsage; }
   // The host reads the options flat. Upstream starts compaction without
   // awaiting it and reports the outcome through onComplete/onError, so a call
@@ -1737,6 +1744,8 @@ function createNoOpUI(ui) {
     onThemeChange: ui.onThemeChange,
     onToolsExpandedChange: ui.onToolsExpandedChange,
     bell: ui.bell,
+    // pig divergence (D237): the host answers with the error that names the mode.
+    writeTerminal: ui.writeTerminal,
   };
 }
 
@@ -1803,6 +1812,8 @@ class RuntimeUI {
   }
   // pig additive (D19): a Pi extension rings the bell by writing BEL to process.stdout, which in this subprocess is not the terminal.
   bell() { this.runtime.fireAndForget("ui.bell", {}); }
+  // pig divergence (D237): a Pi extension writes terminal control strings to process.stdout, which in this subprocess is the host wire; the host writes them between frames.
+  async writeTerminal(data) { await this.runtime.call("ui.writeTerminal", { data }); }
   setStatus(key, text) {
     // Upstream mutates FooterDataProvider synchronously before requesting a
     // render. Keep the subprocess replica current before sending the host call

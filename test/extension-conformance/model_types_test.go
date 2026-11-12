@@ -671,6 +671,20 @@ def register_host_surface(ext):
         ctx.bell()
         return json.dumps({"error": "<nil>"})
 
+    def write_terminal(ctx, args):
+        try:
+            ctx.write_terminal(args.get("data", ""))
+        except Exception as error:
+            return json.dumps({"error": str(error)})
+        return json.dumps({"error": "<nil>"})
+
+    def relaunch(ctx, args):
+        try:
+            ctx.relaunch(args.get("args", []), args.get("env", {}))
+        except Exception as error:
+            return json.dumps({"error": str(error)})
+        return json.dumps({"error": "<nil>"})
+
     def tool_call(ctx, args):
         params = ctx.tool_params()
         meta = params.get("meta") if params is not None else None
@@ -680,7 +694,7 @@ def register_host_surface(ext):
         "c3_theme_arm": theme_arm, "c3_theme_disarm": theme_disarm, "c3_theme_log": lambda ctx, args: json.dumps({"log": log["theme"]}),
         "c3_theme_gate_arm": theme_gate_arm, "c3_theme_gate_state": theme_gate_state, "c3_theme_gate_release": theme_gate_release,
         "c3_expanded_arm": expanded_arm, "c3_expanded_disarm": expanded_disarm, "c3_expanded_log": lambda ctx, args: json.dumps({"log": log["expanded"]}),
-        "c3_widget_arm": widget_arm, "c3_widget_clear": widget_clear, "c3_bell": bell, "c3_tool_call": tool_call,
+        "c3_widget_arm": widget_arm, "c3_widget_clear": widget_clear, "c3_bell": bell, "c3_write_terminal": write_terminal, "c3_relaunch": relaunch, "c3_tool_call": tool_call,
         "c3_source": lambda ctx, args: json.dumps({"info": ctx.extension_source_info()}),
         "c3_loaded": lambda ctx, args: json.dumps({"loaded": log["loaded"], "factoryHeard": log["heard"], "heardAtEmit": log["heard_at_emit"], "errorEmitFailed": log["error_emit_failed"], "crossOwnAt": log["cross_own_at"], "crossReturnedAt": log["cross_returned_at"], "ackHeard": log["ack_heard"], "ackAtCross": log["ack_at_cross"]}),
     }

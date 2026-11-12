@@ -163,6 +163,7 @@ func (e *Extension) unsubscribe(sub *busSub) func() {
 }
 
 // Emit delivers data to every listener of channel, in registration order, and returns when each has finished. Like EventEmitter, an emit on "error" with no listener fails.
+// This extension's own listeners run before Emit returns. Do not hold a lock across the call that a listener takes (extension API docs, "Host calls that run your own handlers before they return").
 //
 // Called through [Extension.Events] while the factory runs (before [Extension.Run]), it does what Pi's synchronous emit does in a factory: the Host delivers it to every listener it holds, in registration order, the listeners of the extensions loaded before this one and then this extension's own, which [EventBus.On] registered with it at once; each finishes before Emit returns, and an emit on "error" that nobody hears fails. The first factory-time bus call connects to the Host, so a factory that runs with no Host (no PIG_EXT_SOCKET, as in a unit test) gets an error. A listener the factory's emit runs has a [Context] with no session state yet (its Cwd and Mode are empty), and until the extension registers the only host calls it can make are pi.events ones and the parse helpers (ParseFrontmatter, ParseDate): a nested [Context.Events] Emit reaches the same listeners. Use [Extension.OnLoaded] for work that needs the live session.
 func (b EventBus) Emit(channel string, data any) error {

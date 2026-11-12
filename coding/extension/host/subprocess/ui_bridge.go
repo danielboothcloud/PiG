@@ -445,6 +445,14 @@ type HostCallbacks struct {
 	// upstream: types.ts:315
 	Shutdown func()
 
+	// ShutdownWithCode is Shutdown with the pig process's exit status, which also stops print and JSON mode before its next prompt (CallShutdownWithCode).
+	// pig divergence (D236): Pi extensions end startup with process.exit(code).
+	ShutdownWithCode func(code int)
+
+	// Relaunch accepts a restart of pig in the same process with other arguments and environment, or returns why the mode cannot restart now (CallRelaunch). On success the mode shuts down as for Shutdown and then replaces the process image.
+	// pig divergence (D238): a Pi extension relaunches Pi by spawning a child on the terminal it shares.
+	Relaunch func(RelaunchRequest) error
+
 	// Compact triggers compaction without awaiting completion.
 	// upstream: types.ts:319
 	Compact func(context.Context, *extension.CompactOptions)
@@ -1130,6 +1138,8 @@ func (b *UIBridge) HostStateChanged() {
 //   - "abort":           func()
 //   - "hasPendingMessages": func() bool
 //   - "shutdown":        func()
+//   - "shutdownWithCode": func(int)
+//   - "relaunch":        func(RelaunchRequest) error
 //   - "compact":         func(context.Context, *extension.CompactOptions)
 //   - "waitForIdle":     func(context.Context) error
 //   - "reload":          func(context.Context) error
@@ -1214,6 +1224,10 @@ func (b *UIBridge) SetHostAction(key string, fn any) {
 		b.actions.HasPendingMessages = fn.(func() bool)
 	case "shutdown":
 		b.actions.Shutdown = fn.(func())
+	case "shutdownWithCode":
+		b.actions.ShutdownWithCode = fn.(func(int))
+	case "relaunch":
+		b.actions.Relaunch = fn.(func(RelaunchRequest) error)
 	case "compact":
 		b.actions.Compact = fn.(func(context.Context, *extension.CompactOptions))
 	case "waitForIdle":
@@ -1585,6 +1599,10 @@ func (b *UIBridge) handleCall(ctx context.Context, extName string, owner *Conn, 
 		return b.handleHasPendingMessages(actions)
 	case "shutdown":
 		return b.handleShutdown(actions)
+	case CallShutdownWithCode:
+		return b.handleShutdownWithCode(actions, call.Args)
+	case CallRelaunch:
+		return b.handleRelaunch(actions, call.Args)
 	case "compact":
 		return b.handleCompact(ctx, actions, call.Args)
 

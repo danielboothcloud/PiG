@@ -305,6 +305,7 @@ func runRPCMode(ctx context.Context, flags Args, activePiglet *piglet.Piglet, re
 		shutdown:        shutdownGate,
 		stdoutWait:      func(ctx context.Context) { rawStdout.Wait(ctx) },
 	}
+	host.requestShutdownWithCode = shutdownGate.RequestWithCode
 	inputs := builder.rpcInputs(processCtx, initial, &rpcStartup{
 		Manager: resources.SessionManager, ResumePath: resources.ResumePath, SessionDir: sessionDir,
 	})
@@ -427,6 +428,11 @@ func serveRPCMode(ctx context.Context, rt *coding.Runtime, options rpcModeOption
 		stopProfiles()
 		// pig additive (D102): a claimed exit.log line is flushed first, and an emergency exit in flight ends the process with its 129.
 		codingagent.BeforeExit()
+		// pig divergence (D238): an accepted relaunch replaces the image where RPC mode would exit 0.
+		if code == 0 && relaunchPending() {
+			releaseForRelaunch()
+			runPendingRelaunch()
+		}
 		// Upstream process.exit does not wait for providers or suspended extension callbacks.
 		os.Exit(code)
 	}
@@ -516,6 +522,7 @@ func serveRPCMode(ctx context.Context, rt *coding.Runtime, options rpcModeOption
 		forceSignal,
 	)
 	host.drain = shutdown.drained
+	shutdown.requestedCode = shutdownGate.ExitCode
 	// pig additive (D19): the host waits in-process for the commands Pi answers before it reads stdin's end, because their runtimes are other processes whose frames race the shutdown's own writes.
 	shutdown.settle = func() bool {
 		// Pi reads stdin's end in an event-loop iteration of its own: after the settle tail that a published agent_end started, and after the response of every command that settles in the microtasks and check phase of its line's iteration (rpc-mode.ts:355-360,802-805).
@@ -856,14 +863,20 @@ func serveRPCMode(ctx context.Context, rt *coding.Runtime, options rpcModeOption
 	// before stdin ended.
 	loopIdle := make(chan struct{})
 	go func() {
-		err := rpcclient.ReadJSONLBatches(os.Stdin, func(lines [][]byte) bool {
-			select {
-			case inputLines <- lines:
-				return true
-			case <-ctx.Done():
-				return false
-			}
-		})
+		var err error
+		if host.relaunchInput.attach() {
+			err = rpcclient.ReadJSONLBatches(os.Stdin, func(lines [][]byte) bool {
+				select {
+				case inputLines <- lines:
+					return true
+				case <-ctx.Done():
+					return false
+				}
+			})
+		} else {
+			// pig divergence (D238): a relaunch accepted during startup leaves stdin unread for the relaunched pig; the shutdown it requested ends the mode.
+			<-ctx.Done()
+		}
 		close(inputLines)
 		if extensionHost, _ := rpcExtensionHost(sess()); extensionHost != nil {
 			extensionHost.EndInput()

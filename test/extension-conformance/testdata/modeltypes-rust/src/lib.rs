@@ -889,6 +889,25 @@ fn register_host_surface(ext: &mut Extension) {
         };
         ToolResult::text(json!({"error": outcome}).to_string())
     });
+    ext.tool("c3_write_terminal", "c3_write_terminal", empty_schema(), |ctx, args| {
+        let outcome = match ctx.write_terminal(args["data"].as_str().unwrap_or_default()) {
+            Ok(()) => "<nil>".to_string(),
+            Err(error) => error.to_string(),
+        };
+        ToolResult::text(json!({"error": outcome}).to_string())
+    });
+    ext.tool("c3_relaunch", "c3_relaunch", empty_schema(), |ctx, args| {
+        let list: Vec<String> = args["args"].as_array().map(|list| list.iter().map(|arg| arg.as_str().unwrap_or_default().to_string()).collect()).unwrap_or_default();
+        let env: std::collections::BTreeMap<String, Option<String>> = args["env"]
+            .as_object()
+            .map(|env| env.iter().map(|(key, value)| (key.clone(), value.as_str().map(str::to_string))).collect())
+            .unwrap_or_default();
+        let outcome = match ctx.relaunch(&list, &env) {
+            Ok(()) => "<nil>".to_string(),
+            Err(error) => error.to_string(),
+        };
+        ToolResult::text(json!({"error": outcome}).to_string())
+    });
     ext.tool("c3_tool_call", "c3_tool_call", empty_schema(), |ctx, _| {
         let params = ctx.tool_params();
         let keys: Vec<String> = params.as_ref().map(|params| params.keys().cloned().collect()).unwrap_or_default();

@@ -326,6 +326,9 @@ so far, killed, code 0. It replaces the cancellation of the calling request."
 (defun ctx-has-pending-messages-p (ctx) (eq (reply-field ctx "hasPendingMessages" "pending") t))
 (defun ctx-abort (ctx) (ctx-call-host ctx "abort") nil)
 (defun ctx-shutdown (ctx) (ctx-call-host ctx "shutdown") nil)
+(defun ctx-relaunch (ctx args &key env)
+  "End the current runtime and restart pig in the same process, terminal and standard streams with ARGS (a list of strings: the complete argument list after the pig executable) and pig's environment changed by ENV, a hash-table (OBJ) whose string value sets a variable and :NULL or NIL removes it; PIG_EXT_* and PIG_HARNESS_* belong to the host and are refused. A Pi extension does this by spawning a new Pi with stdio inherit and exiting with its status. When ARGS choose no session (--session, --session-id, --continue, --resume, --fork, --no-session), pig adds --session with the current session file if that file exists. A return means the host accepted: pig then shuts down as for ctx-shutdown (session_shutdown reason quit) and replaces its process image. A host-call-error says why pig cannot restart now, and the runtime keeps running: on Windows, after pig read piped stdin, in RPC mode once pig reads commands, while pig shuts down, and when a relaunch is pending. pig divergence (D238)."
+  (ctx-call-host ctx "relaunch" (obj "args" (coerce args 'simple-vector) "env" (or env (obj)))) nil)
 (defun ctx-reload (ctx) (ctx-call-host ctx "reload") nil)
 
 (declaim (ftype function core-compact-async))

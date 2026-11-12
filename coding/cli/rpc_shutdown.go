@@ -41,6 +41,8 @@ type rpcShutdown struct {
 	settle func() bool
 	// die ends the process with a termination signal's default action.
 	die func(sig os.Signal)
+	// requestedCode is the exit status an extension's shutdownWithCode asked for, which replaces a 0 status whatever started shutdown (D236). It may be nil.
+	requestedCode func() int
 
 	// dying is set when a termination signal's default action begins.
 	dying atomic.Bool
@@ -79,6 +81,10 @@ func (s *rpcShutdown) flushAndExit(flush bool, code int) {
 	}
 	if !s.exiting.CompareAndSwap(false, true) {
 		return
+	}
+	// pig divergence (D236): Pi extensions end startup with process.exit(code), which no later 0 replaces.
+	if code == 0 && s.requestedCode != nil {
+		code = s.requestedCode()
 	}
 	s.exit(code)
 }

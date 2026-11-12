@@ -617,6 +617,7 @@ type SendMessageOptions struct {
 }
 
 // SendMessage injects a custom message into the conversation. With TriggerTurn the run it starts keeps [Context.IsIdle] busy until the handler yields ([Context.Yield], [Context.Sleep]) or returns; a handler that polls for that run with a raw time.Sleep stays busy.
+// With TriggerTurn on an idle session, this extension's before_agent_start handler can run before SendMessage returns, as it does in RPC mode. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) SendMessage(customType, content string, display bool, opts SendMessageOptions) error {
 	options := map[string]any{}
 	if opts.TriggerTurn != nil {
@@ -661,6 +662,7 @@ type CustomMessage struct {
 // TriggerTurn the run it starts keeps IsIdle busy until this handler yields
 // ([Context.Yield], [Context.Sleep], a call Pi awaits, or its return): a handler
 // that polls IsIdle for that run must use Sleep, not time.Sleep (D225).
+// With TriggerTurn on an idle session, this extension's before_agent_start handler can run before SendCustomMessage returns, as it does in RPC mode. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) SendCustomMessage(msg CustomMessage, opts SendMessageOptions) error {
 	options := map[string]any{}
 	if opts.TriggerTurn != nil {
@@ -691,6 +693,7 @@ func (c Context) SendCustomMessage(msg CustomMessage, opts SendMessageOptions) e
 }
 
 // SendUserMessage injects a user message containing a string or text/image content blocks.
+// This extension's input and before_agent_start handlers, and in print and JSON mode its agent_start handler, can run before SendUserMessage returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) SendUserMessage(content any, deliverAs string) error {
 	result, err := c.callHost("sendUserMessage", map[string]any{
 		"content": content,
@@ -761,6 +764,7 @@ func (c Context) setSharedEnv(key string, value *string) error {
 }
 
 // SetSessionName sets the session name.
+// It sends session_info_changed, and this extension's handler runs before SetSessionName returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) SetSessionName(name string) error {
 	result, err := c.callHost("setSessionName", map[string]string{"name": name})
 	if err != nil {
@@ -805,11 +809,13 @@ func (c Context) GetThinkingLevel() (string, error) {
 }
 
 // SetThinkingLevel sets the thinking level.
+// A changed effective level sends thinking_level_select, and this extension's handler runs before SetThinkingLevel returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) SetThinkingLevel(level string) {
 	_, _ = c.callHost("setThinkingLevel", map[string]string{"level": level})
 }
 
 // SetModel changes the active model.
+// A change sends thinking_level_select (when the effective level changes) and model_select, and this extension's handlers run before SetModel returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) SetModel(model string) (bool, error) {
 	result, err := c.callHost("setModel", map[string]string{"model": model})
 	if err != nil {
@@ -2411,6 +2417,49 @@ func (c Context) Shutdown() {
 	_, _ = c.callHost("shutdown", nil)
 }
 
+// ShutdownWithCode is Shutdown that ends the pig process with exit status code (0 to 255), what a Pi extension does with process.exit(code). In interactive and RPC mode it is Shutdown with that status. In print and JSON mode, where Pi ignores ctx.shutdown(), it aborts a run in progress and stops before the next prompt, and pig writes no result. A request made while the session starts sends no initial prompt in any mode. Only a termination signal's status replaces code. The error reports an invalid code or a host without the call. pig divergence (D236).
+func (c Context) ShutdownWithCode(code int) error {
+	result, err := c.callHost("shutdownWithCode", map[string]int{"code": code})
+	return callResultError(result, err)
+}
+
+// HostLaunch is how pig was started, which a Pi extension reads from its own process: Argv is process.argv.slice(2), the arguments after the pig executable in order and unchanged (an --api-key argument included, as in Pi); Mode is the run mode ("tui", "rpc", "json" or "print"), as [Context.Mode]; StdinIsTTY and StdoutIsTTY are process.stdin.isTTY and process.stdout.isTTY of pig at launch. It holds nothing from the environment.
+type HostLaunch struct {
+	Argv        []string `json:"argv"`
+	Mode        string   `json:"mode"`
+	StdinIsTTY  bool     `json:"stdinIsTTY"`
+	StdoutIsTTY bool     `json:"stdoutIsTTY"`
+}
+
+// HostLaunch returns how pig was started. A subprocess extension's own os.Args, stdin and stdout are its process's, not pig's. pig divergence (D236).
+func (c Context) HostLaunch() (HostLaunch, error) {
+	launch, err := hostDecoded[HostLaunch](c, "hostLaunch", nil)
+	if err == nil && launch.Argv == nil {
+		launch.Argv = []string{}
+	}
+	return launch, err
+}
+
+// RelaunchOptions are the arguments of [Context.Relaunch]. Args is the complete argument list after the pig executable, as process.argv.slice(2) of the Pi a Pi extension spawns; nil is an empty list. Env changes pig's environment for the relaunched process: a value sets the variable and a nil value removes it. PIG_EXT_* and PIG_HARNESS_* belong to the host and are refused.
+type RelaunchOptions struct {
+	Args []string
+	Env  map[string]*string
+}
+
+// Relaunch ends the current runtime and restarts pig in the same process, terminal and standard streams with options.Args and the environment changed by options.Env, what a Pi extension does by spawning a new Pi with stdio "inherit" and exiting with its status. When the arguments choose no session (--session, --session-id, --continue, --resume, --fork, --no-session), pig adds --session with the current session file if that file exists, so the relaunched runtime continues the session. A nil error means the host accepted the request: pig then shuts down as for [Context.Shutdown] (interactive mode when idle; print and JSON mode abort the run and write no result), session_shutdown runs with reason "quit", and the process image is replaced. The error says why pig cannot restart now, and the runtime keeps running: on Windows, after pig read piped stdin, in RPC mode once pig reads commands, while pig shuts down, when a relaunch is pending, or for a refused environment key. pig divergence (D238).
+func (c Context) Relaunch(options RelaunchOptions) error {
+	args := options.Args
+	if args == nil {
+		args = []string{}
+	}
+	request := map[string]any{"args": args}
+	if len(options.Env) > 0 {
+		request["env"] = options.Env
+	}
+	result, err := c.callHost("relaunch", request)
+	return callResultError(result, err)
+}
+
 // Compact triggers compaction. Options are optional.
 func (c Context) Compact(opts map[string]any) {
 	_, _ = c.callHost("compact", opts)
@@ -2515,6 +2564,7 @@ func (c Context) Sleep(d time.Duration) error {
 }
 
 // NewSession starts a new session. opts may hold "parentSession", a "setup" SetupFunc that seeds the new session through its SessionManager before it starts (types.ts:411), and a "withSession" WithSessionFunc.
+// This extension's session_before_switch and session_shutdown handlers, and the setup and withSession callbacks, run before NewSession returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) NewSession(opts map[string]any) (CancelledResult, error) {
 	args, setup, err := setupOption(opts)
 	if err != nil {
@@ -2540,6 +2590,7 @@ func (c Context) NewSession(opts map[string]any) (CancelledResult, error) {
 }
 
 // Fork creates a new branch from an entry. opts may hold "position" and a "withSession" WithSessionFunc.
+// This extension's session_before_fork and session_shutdown handlers, and the withSession callback, run before Fork returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) Fork(entryID string, opts map[string]any) (CancelledResult, error) {
 	args := map[string]any{"entryId": entryID}
 	maps.Copy(args, opts)
@@ -2547,6 +2598,7 @@ func (c Context) Fork(entryID string, opts map[string]any) (CancelledResult, err
 }
 
 // NavigateTree moves to a different point in the session tree.
+// This extension's session_before_tree and session_tree handlers run before NavigateTree returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) NavigateTree(targetID string, opts map[string]any) (CancelledResult, error) {
 	args := map[string]any{"targetId": targetID}
 	maps.Copy(args, opts)
@@ -2558,6 +2610,7 @@ func (c Context) NavigateTree(targetID string, opts map[string]any) (CancelledRe
 }
 
 // SwitchSession switches to a different session file. opts may hold a "withSession" WithSessionFunc.
+// This extension's session_before_switch and session_shutdown handlers, and the withSession callback, run before SwitchSession returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) SwitchSession(sessionPath string, opts map[string]any) (CancelledResult, error) {
 	args := map[string]any{"sessionPath": sessionPath}
 	maps.Copy(args, opts)
@@ -2565,6 +2618,7 @@ func (c Context) SwitchSession(sessionPath string, opts map[string]any) (Cancell
 }
 
 // Reload reloads extensions, skills, prompts, and themes.
+// This extension's session_shutdown handler runs before Reload returns. Do not hold a lock across the call that the handler takes (extension API docs, "Host calls that run your own handlers before they return").
 func (c Context) Reload() error {
 	result, err := c.callHost("reload", nil)
 	// agent-session.ts:3660-3664: the reload invalidates this context before it returns, so its members throw the stale message after it. The host sends the invalidate notify before the call result, and the main loop applies notifies after the read loop routed the result here, so wait for those notifies.

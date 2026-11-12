@@ -592,6 +592,8 @@ func (m *InteractiveMode) wireSubprocessHostCallbacks() func() {
 	b.SetHostAction("getScopedModels", m.extensionScopedModels)
 	b.SetHostAction("hasPendingMessages", m.extensionHasPendingMessages)
 	b.SetHostAction("shutdown", m.requestExtensionShutdown)
+	b.SetHostAction("shutdownWithCode", m.requestExtensionShutdownWithCode)
+	b.SetHostAction("relaunch", m.requestExtensionRelaunch)
 	b.SetHostAction("waitForIdle", func(ctx context.Context) error {
 		extension.CallInitiated(ctx)
 		return m.waitForIdle(m.runCtx)

@@ -162,16 +162,51 @@ func startPrintMode(ctx context.Context, host printModeRuntime, opts printModeOp
 // options. Normal completion drains output; a termination signal disposes the
 // runtime without waiting for stdout and exits with 128+signum.
 func runPrintMode(ctx context.Context, rt *coding.Runtime, opts printModeOptions) (exitCode int, err error) {
+	var exitRequest printExitRequest
 	// print-mode.ts:35,158,161: the run's exit code is 0, or 1 when the run failed or stopped on an error; err says what failed for a caller that has not reported it.
 	defer func() {
 		if err != nil {
 			exitCode = 1
 		}
+		// pig divergence (D236): an extension's shutdownWithCode is Pi's process.exit(code); only a termination signal's status outranks it.
+		if code, ok := exitRequest.code(); ok {
+			if _, signalled := errors.AsType[*signalExitError](err); !signalled && receivedTerminationSignal.Load() == 0 {
+				exitCode, err = code, nil
+				if code != 0 {
+					err = errPrintModeHandled
+				}
+			}
+		}
 	}()
-	return 0, runPrintModeIn(ctx, rt, opts)
+	return 0, runPrintModeIn(ctx, rt, opts, &exitRequest)
 }
 
-func runPrintModeIn(ctx context.Context, rt *coding.Runtime, opts printModeOptions) (err error) {
+// printExitRequest is the exit status an extension asked for with shutdownWithCode. Pi's print mode ignores ctx.shutdown(); the request stops the run before its next prompt, aborts a run in progress and skips the result.
+// pig divergence (D236): Pi extensions end startup with process.exit(code).
+type printExitRequest struct {
+	mu     sync.Mutex
+	status int
+	set    bool
+}
+
+func (r *printExitRequest) request(code int) {
+	r.mu.Lock()
+	r.status, r.set = code, true
+	r.mu.Unlock()
+}
+
+func (r *printExitRequest) code() (int, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.status, r.set
+}
+
+func (r *printExitRequest) requested() bool {
+	_, ok := r.code()
+	return ok
+}
+
+func runPrintModeIn(ctx context.Context, rt *coding.Runtime, opts printModeOptions, exitRequest *printExitRequest) (err error) {
 	// Take over os.Stdout in non-TTY contexts so any stdout
 	// writes from tools / extensions / agent infra are redirected to
 	// stderr instead of corrupting the print-mode output framing.
@@ -416,6 +451,23 @@ func runPrintModeIn(ctx context.Context, rt *coding.Runtime, opts printModeOptio
 		// goroutine alone changes commands.
 		publishedCommands.Store(new(commands))
 		if bridge != nil {
+			// pig divergence (D236): Pi extensions end startup with process.exit(code).
+			bridge.SetHostAction("shutdownWithCode", func(code int) {
+				exitRequest.request(code)
+				current().RequestAbort()
+			})
+			// pig divergence (D238): a relaunch ends print and JSON mode as shutdownWithCode(0) does, then replaces the process image.
+			bridge.SetHostAction("relaunch", func(request subprocess.RelaunchRequest) error {
+				if exitRequest.requested() || ctx.Err() != nil {
+					return errors.New(subprocess.CallRelaunch + ": pig is already shutting down")
+				}
+				if err := acceptRelaunch(request); err != nil {
+					return err
+				}
+				exitRequest.request(0)
+				current().RequestAbort()
+				return nil
+			})
 			bridge.SetHostAction("getAllTools", func() []subprocess.ToolInfo {
 				return codingagent.ExtensionToolInfosScoped(runner, opts.toolRegistryAllowed, opts.toolRegistryExcluded, current().ToolScope())
 			})
@@ -512,7 +564,7 @@ func runPrintModeIn(ctx context.Context, rt *coding.Runtime, opts printModeOptio
 			err = errPrintModeHandled
 			return
 		}
-		if runErr != nil && receivedTerminationSignal.Load() == 0 {
+		if runErr != nil && receivedTerminationSignal.Load() == 0 && !exitRequest.requested() {
 			_, _ = fmt.Fprintln(opts.stderr, jsstring.StreamText(runErr.Error()))
 			err = errPrintModeHandled
 		}
@@ -526,7 +578,7 @@ func runPrintModeIn(ctx context.Context, rt *coding.Runtime, opts printModeOptio
 	// A termination signal ends the run where it is: upstream's handler
 	// disposes the runtime and exits, so no later prompt starts.
 	send := func(message string, images []ai.ImageContent) {
-		if runErr != nil || ctx.Err() != nil {
+		if runErr != nil || ctx.Err() != nil || exitRequest.requested() {
 			return
 		}
 		_, runErr = sendPrintPrompt(ctx, current(), *currentCommands.Load(), message, images)
@@ -552,8 +604,8 @@ func runPrintModeIn(ctx context.Context, rt *coding.Runtime, opts printModeOptio
 	if err := current().FlushEvents(ctx); err != nil && runErr == nil && ctx.Err() == nil {
 		runErr = fmt.Errorf("flush session events: %w", err)
 	}
-	if runErr != nil {
-		return nil // reported by the teardown above
+	if runErr != nil || exitRequest.requested() {
+		return nil // reported by the teardown above; an exit request writes no result
 	}
 	if opts.Mode != "text" {
 		return nil

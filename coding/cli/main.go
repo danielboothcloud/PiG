@@ -721,6 +721,8 @@ func Main(args []string, options *MainOptions) {
 	// Pi's process 'exit' handler also runs when Node exits on an uncaught exception or the event loop drains (tui.ts exitRestoreHandler, 9df819de, #11170).
 	// Deferred first, so it runs last: after the other cleanups, on return and on a panic unwinding through Main, before the runtime prints the panic.
 	defer tui.RestoreTerminalOnExit()
+	// pig divergence (D238): a relaunch an extension asked for replaces the process image once Main returned normally and every other deferred cleanup ran.
+	defer relaunchAfterMain()
 	defer stopProfiles()
 	defer nativeplatform.ShutdownClipboard()
 	defer exitOnRenderOverflow()
@@ -898,6 +900,8 @@ func Main(args []string, options *MainOptions) {
 		procpolicy.ApplyRPC()
 	}
 
+	// The output guard below replaces os.Stdout; extensions read the terminal state pig started with (D236).
+	launchTerminals()
 	// Non-interactive startup reserves stdout except for plain runtime metadata (Pi main.ts:129-130,638-642).
 	if runMode != appModeInteractive && !isPlainRuntimeMetadataCommand(flags) {
 		if err := codingagent.TakeOverStdout(); err != nil {
@@ -1285,6 +1289,8 @@ func Main(args []string, options *MainOptions) {
 			exitProcess(1)
 		}
 		trace.Mark("stdin-read-done")
+		// pig divergence (D238): a relaunched pig would read the drained pipe as empty, so a relaunch is refused once content was read.
+		pipedStdinConsumed.Store(stdinContent != "")
 	}
 	timings.Time("readPipedStdin")
 	initialMessage, initialImages, extraMessages, messageErr := prepareInitialMessage(initialCWD, flags.Messages, flags.FileArgs, stdinContent)
@@ -1604,6 +1610,8 @@ func Main(args []string, options *MainOptions) {
 	iopts.TuiMode = flags.TuiMode
 	iopts.InitialThemeSetting = flags.UseTheme
 	iopts.TerminateExtensionProcesses = sessionFactory.TerminateProcesses
+	// pig divergence (D238): Main replaces the process image after Run returns.
+	iopts.Relaunch = acceptRelaunch
 	interactive := codingagent.NewInteractiveMode(interactiveRuntime{rt}, iopts)
 	// SIGTERM must reach extensions before the root context is cancelled.
 	setTerminationShutdownHook(interactive.ShutdownFromSignal)
@@ -1623,6 +1631,10 @@ func Main(args []string, options *MainOptions) {
 		}
 		printCLIError("%v", err)
 		exitProcess(1)
+	}
+	// pig divergence (D236): an extension's ShutdownWithCode sets the status Pi's process.exit(code) gives.
+	if code, ok := interactive.RequestedExitCode(); ok && code != 0 {
+		exitProcess(code)
 	}
 }
 

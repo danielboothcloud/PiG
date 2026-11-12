@@ -67,6 +67,12 @@ func (c Context) Bell() error {
 	return callResultError(result, err)
 }
 
+// WriteTerminal writes terminal control strings to the interactive terminal between TUI frames, what a Pi extension does with process.stdout.write: OSC 777 or OSC 99 notifications, a window title, BEL. data must be a sequence of BEL bytes, OSC strings (ESC ] ... BEL or ESC \) other than OSC 8 hyperlinks, and tmux passthroughs (ESC P tmux; ... ESC \) of those, at most 64 KiB, so that it neither prints nor moves the cursor; anything else is refused whole. The write is queued before the call returns. In print, JSON and RPC mode, which have no terminal UI, it writes nothing and returns an error that names the mode. pig divergence (D237).
+func (c Context) WriteTerminal(data string) error {
+	result, err := c.callHost("ui.writeTerminal", map[string]string{"data": data})
+	return callResultError(result, err)
+}
+
 // ExtensionSourceInfo is the provenance the loader stamped on this extension: upstream's extension.sourceInfo (types.ts SourceInfo), where ExtensionRunner.getExtensionPaths reads the extension's path from. Path is the entry file and BaseDir the package root when the extension came from a Package; a Pi extension reads both from import.meta.url, which a compiled subprocess extension has no equivalent of. ok is false when the host holds no source for this extension.
 func (c Context) ExtensionSourceInfo() (info SourceInfo, ok bool) {
 	c.ext.mu.RLock()

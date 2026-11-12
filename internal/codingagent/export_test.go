@@ -11,6 +11,7 @@ import (
 	"github.com/MichaelKinsy/PiG/agent"
 	"github.com/MichaelKinsy/PiG/coding/extension"
 	"github.com/MichaelKinsy/PiG/coding/extension/host/inproc"
+	"github.com/MichaelKinsy/PiG/coding/extension/host/subprocess"
 	"github.com/MichaelKinsy/PiG/tui"
 	"github.com/MichaelKinsy/PiG/tui/widthx"
 )
@@ -128,6 +129,26 @@ func (h *TestHarness) Enter(text string) {
 // the first. Call it off the owner loop.
 func (h *TestHarness) SubmitInitialMessages(messages []string) {
 	h.m.submitInitialMessages(h.ctx, messages)
+}
+
+// SubmitStartupMessages runs the startup dispatch of the positional messages on the owner loop, as run() does once the TUI is up.
+func (h *TestHarness) SubmitStartupMessages(initial string, more []string) {
+	h.Do(func() {
+		h.m.opts.InitialMessage, h.m.opts.InitialMessages = initial, more
+		h.m.submitStartupMessages(h.ctx)
+	})
+}
+
+// MarkExitCodeRequested records an extension's shutdownWithCode status without asking the loop to stop, the state run() sees when session_start requested it.
+func (h *TestHarness) MarkExitCodeRequested(code int) {
+	h.m.exitCode.Store(int32(code))
+	h.m.exitCodeSet.Store(true)
+}
+
+// RequestRelaunch is an extension's relaunch request with accept as the command line's acceptance (D238).
+func (h *TestHarness) RequestRelaunch(accept func(subprocess.RelaunchRequest) error, request subprocess.RelaunchRequest) error {
+	h.m.opts.Relaunch = accept
+	return h.m.requestExtensionRelaunch(request)
 }
 
 // Key dispatches one key sequence. Call it on the owner loop, like Enter.

@@ -30,5 +30,9 @@ func exitProcess(code int) {
 	tui.RestoreTerminalOnExit()
 	// pig additive (D102): an emergency exit in flight ends the process with its 129, and a claimed exit.log line is flushed first.
 	codingagent.BeforeExit()
+	// pig divergence (D238): an accepted relaunch replaces the image where the process would exit 0.
+	if code == 0 {
+		runPendingRelaunch()
+	}
 	os.Exit(code)
 }

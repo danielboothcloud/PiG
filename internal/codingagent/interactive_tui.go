@@ -2,11 +2,13 @@ package codingagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/MichaelKinsy/PiG/coding/extension/host/subprocess"
 	"github.com/MichaelKinsy/PiG/tui"
 )
 
@@ -525,4 +527,38 @@ func (m *InteractiveMode) interruptShutdown() bool {
 func (m *InteractiveMode) requestExtensionShutdown() {
 	RecordEnding(m.opts.AgentDir, "extension requested shutdown (ctx.shutdown())")
 	m.requestShutdown()
+}
+
+// requestExtensionShutdownWithCode is requestExtensionShutdown that also sets the process's exit status. Run returns normally and its caller exits with RequestedExitCode.
+// pig divergence (D236): Pi extensions end startup with process.exit(code).
+func (m *InteractiveMode) requestExtensionShutdownWithCode(code int) {
+	m.exitCode.Store(int32(code))
+	m.exitCodeSet.Store(true)
+	RecordEnding(m.opts.AgentDir, fmt.Sprintf("extension requested shutdown with exit code %d", code))
+	m.requestShutdown()
+}
+
+// RequestedExitCode returns the exit status an extension asked for with shutdownWithCode, and whether one did.
+func (m *InteractiveMode) RequestedExitCode() (int, bool) {
+	if !m.exitCodeSet.Load() {
+		return 0, false
+	}
+	return int(m.exitCode.Load()), true
+}
+
+// requestExtensionRelaunch ends the session as requestExtensionShutdown does once the caller accepted the relaunch; Run returns normally and its caller replaces the process image.
+// pig divergence (D238): a Pi extension relaunches Pi by spawning a child on the terminal.
+func (m *InteractiveMode) requestExtensionRelaunch(request subprocess.RelaunchRequest) error {
+	if m.opts.Relaunch == nil {
+		return errors.New(subprocess.CallRelaunch + " is not available in this host")
+	}
+	if m.requestExit.Load() {
+		return errors.New(subprocess.CallRelaunch + ": pig is already shutting down")
+	}
+	if err := m.opts.Relaunch(request); err != nil {
+		return err
+	}
+	m.relaunchRequested.Store(true)
+	m.requestShutdown()
+	return nil
 }

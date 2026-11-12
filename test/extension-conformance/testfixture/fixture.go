@@ -2198,6 +2198,27 @@ func Extension() *sdk.Extension {
 		return nil
 	})
 
+	ext.Command("host-launch-probe", "Report ctx.HostLaunch()", func(ctx sdk.Context, _ string) error {
+		launch, err := ctx.HostLaunch()
+		if err != nil {
+			return err
+		}
+		argv, err := json.Marshal(launch.Argv)
+		if err != nil {
+			return err
+		}
+		ctx.Notify(fmt.Sprintf("host-launch=%s:%s:%s:%t:%t", argv, launch.Mode, ctx.Mode(), launch.StdinIsTTY, launch.StdoutIsTTY), "info")
+		return nil
+	})
+
+	ext.Command("shutdown-with-code-probe", "Call ctx.ShutdownWithCode(7), then with an out-of-range code", func(ctx sdk.Context, _ string) error {
+		if err := ctx.ShutdownWithCode(7); err != nil {
+			return err
+		}
+		ctx.Notify(fmt.Sprintf("shutdown-with-code-invalid=%v", ctx.ShutdownWithCode(256)), "info")
+		return nil
+	})
+
 	ext.Command("model-cancel-probe", "Cancel ModelRegistry.CompleteContext after 100 ms", func(ctx sdk.Context, _ string) error {
 		model := map[string]any{"provider": "conformance", "id": "declared", "modelId": "declared", "api": "openai-responses"}
 		request := map[string]any{"messages": []any{map[string]any{"role": "user", "content": "hello", "timestamp": 1}}}

@@ -3660,6 +3660,10 @@ class Context:
         """Ring the terminal bell (BEL) of the interactive terminal between frames, the call a Pi extension makes by writing ``"\\x07"`` to ``process.stdout``. It does nothing where there is no terminal UI: print, JSON and RPC modes."""
         self._call("ui.bell", {})
 
+    def write_terminal(self, data: str) -> None:
+        """Write terminal control strings to the interactive terminal between TUI frames, what a Pi extension does with ``process.stdout.write``: OSC 777 or OSC 99 notifications, a window title, BEL. ``data`` must be a sequence of BEL bytes, OSC strings (``ESC ] ... BEL`` or ``ESC \\``) other than OSC 8 hyperlinks, and tmux passthroughs (``ESC P tmux; ... ESC \\``) of those, at most 64 KiB, so that it neither prints nor moves the cursor; anything else is refused whole. The write is queued before the call returns. In print, JSON and RPC mode, which have no terminal UI, it writes nothing and raises :class:`HostCallError` naming the mode. pig divergence (D237)."""
+        self._call("ui.writeTerminal", {"data": data})
+
     def extension_source_info(self) -> dict[str, Any] | None:
         """The provenance the loader stamped on this extension: upstream's ``extension.sourceInfo`` (``types.ts`` ``SourceInfo``), where ``ExtensionRunner.getExtensionPaths`` reads the extension's path from. ``path`` is the entry file and ``baseDir`` the package root when the extension came from a Package; a Pi extension reads both from ``import.meta.url``, which a subprocess extension has no equivalent of. A dict with ``path``, ``source``, ``scope``, ``origin`` and, for a Package, ``baseDir``, as ``get_commands`` reports a command's ``sourceInfo``. None when the host holds no source for this extension."""
         with self.extension._state_lock:
@@ -3791,6 +3795,10 @@ class Context:
 
     def shutdown(self) -> None:
         self._call("shutdown")
+
+    def relaunch(self, args: list[str], env: dict[str, str | None] | None = None) -> None:
+        """End the current runtime and restart pig in the same process, terminal and standard streams with ``args`` (the complete argument list after the pig executable) and pig's environment changed by ``env``: a string sets a variable and ``None`` removes it; ``PIG_EXT_*`` and ``PIG_HARNESS_*`` belong to the host and are refused. A Pi extension does this by spawning a new Pi with stdio ``inherit`` and exiting with its status. When ``args`` choose no session (``--session``, ``--session-id``, ``--continue``, ``--resume``, ``--fork``, ``--no-session``), pig adds ``--session`` with the current session file if that file exists. A return means the host accepted: pig then shuts down as for :meth:`shutdown` (``session_shutdown`` reason ``quit``) and replaces its process image. :class:`HostCallError` says why pig cannot restart now, and the runtime keeps running: on Windows, after pig read piped stdin, in RPC mode once pig reads commands, while pig shuts down, and when a relaunch is pending. pig divergence (D238)."""
+        self._call("relaunch", {"args": list(args), "env": dict(env or {})})
 
     def compact(
         self,

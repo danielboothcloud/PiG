@@ -1188,6 +1188,14 @@ func (u *ExtUIContext) Bell() {
 	}
 }
 
+// WriteTerminal writes an extension's control strings between frames (extension.TerminalWriter), on the path Bell takes.
+// pig divergence (D237): a Pi extension writes them to process.stdout.
+func (u *ExtUIContext) WriteTerminal(data string) {
+	if !u.m.runOnMainOK(func() { u.m.writeTerminal(data) }) {
+		u.m.writeTerminal(data)
+	}
+}
+
 func (u *ExtUIContext) GetToolsExpanded() bool {
 	u.m.toolMu.Lock()
 	defer u.m.toolMu.Unlock()

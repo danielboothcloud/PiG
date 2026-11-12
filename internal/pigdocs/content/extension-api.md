@@ -80,6 +80,48 @@ These are the call names the host accepts. SDK bindings wrap each into a method 
 - `isIdle()`, `hasPendingMessages()`, `waitForIdle()`, `abort()`, `shutdown()`, `reload()`, `compact(options)`.
 - `newSession(opts)`, `fork(entryID, opts)`, `navigateTree(targetID, opts)`, `switchSession(path, opts)` - return `{cancelled: bool}` so the extension can detect user dismissal.
 
+### Host calls that run your own handlers before they return
+
+Some host calls emit an event. The host sends that event to every extension that subscribed to it, the calling extension included, and answers the call only after the handler ran. Pi does the same: a Pi extension runs in Pi's process, and these calls run the handlers inside the call. The behavior is the same in every SDK (Go, Rust, Python, Lisp and Node) and in isolated, packed and fused extensions.
+
+While a call waits for its answer, the SDK keeps reading host messages and runs the event handler on another goroutine (a thread or task in the other SDKs). The handler therefore runs before the call returns. If the caller holds a lock across the call and the handler takes the same lock, the handler waits for the caller, the host waits for the handler, and the caller waits for the host. This deadlock has no timeout.
+
+| Host call (Go method) | Events the calling extension can receive before the call returns |
+|---|---|
+| `setThinkingLevel` (`SetThinkingLevel`) | `thinking_level_select`, when the effective level changes. |
+| `setModel` (`SetModel`) | `thinking_level_select`, when the new model changes the effective level, then `model_select`. |
+| `setSessionName` (`SetSessionName`) | `session_info_changed`. |
+| `newSession` (`NewSession`), `switchSession` (`SwitchSession`) | `session_before_switch`, then `session_shutdown` unless a handler cancels. |
+| `fork` (`Fork`) | `session_before_fork`, then `session_shutdown` unless a handler cancels or the fork fails. |
+| `navigateTree` (`NavigateTree`) | `session_before_tree`, then `session_tree` unless a handler cancels. |
+| `reload` (`Reload`) | `session_shutdown`. |
+| `sendUserMessage` (`SendUserMessage`) | `input` and `before_agent_start`, and `agent_start` in print and JSON mode. See the mode notes below. |
+| `sendMessage` with `triggerTurn` on an idle session (`SendMessage`, `SendCustomMessage`) | `before_agent_start` in RPC mode. See the mode notes below. |
+| `executeTool` (`ExecuteTool`) | `tool_execution_start`, `tool_call`, `tool_execution_update`, `tool_result` and `tool_execution_end` for the nested call, and the nested tool itself when the calling extension registered it. |
+| `pi.events` emit (`Events().Emit`) | The calling extension's own listeners on the channel. |
+
+- For `thinking_level_select` and `session_info_changed`, Pi does not await the handlers. The host waits until the first subscribed handler, in extension load order, returns or makes a host call. A handler of a later extension can run after the call returns. For the other events, the host waits until every handler returns.
+- After `newSession`, `switchSession`, `fork` and `reload`, the replacement session's `session_start` goes to the replacement extension instance (a new process for a subprocess extension), not to the caller.
+- Callbacks that you pass to a call also run before it returns, on another goroutine: `ExecuteToolOptions.OnUpdate`, the `setup` callback of `NewSession`, and the `withSession` callback of `NewSession`, `Fork` and `SwitchSession`. A model call (`complete`, `stream`) whose provider the calling extension registered runs that provider's operations in the calling extension. Do not hold a lock across these calls that the callback or provider takes.
+- Mode notes: the rows from `setThinkingLevel` to `reload`, and the `executeTool` and `pi.events` rows, are the same in interactive, print, JSON and RPC mode. `sendUserMessage` and `sendMessage` with `triggerTurn` differ by mode. Interactive mode answers both calls before `input` and `before_agent_start` run. RPC mode answers `sendUserMessage` after the `input` and `before_agent_start` handlers, and `sendMessage` after the `before_agent_start` handlers. Print and JSON mode answer `sendUserMessage` after the `input`, `before_agent_start` and `agent_start` handlers, and answer `sendMessage` before `before_agent_start`. Treat both calls as calls that run your handlers in every mode.
+- Other calls send no event back to the calling extension before they return, for example `appendEntry`, `setLabel`, `setActiveTools`, `refreshTools`, `exec`, `compact` and the `ui.*` notifications. `compact` starts compaction and returns; `session_before_compact`, `session_compact` and `session_compact_failed` arrive after it returns. Holding a lock across these calls does not deadlock on an event of this extension.
+
+Release the lock before the call, or record what you need under the lock, make the call without the lock, and apply the result after the call returns:
+
+```go
+// Deadlock: the thinking_level_select handler takes s.mu while SetThinkingLevel waits for that handler.
+s.mu.Lock()
+s.wanted = level
+ctx.SetThinkingLevel(level)
+s.mu.Unlock()
+
+// Safe: the handler can take s.mu while the call waits.
+s.mu.Lock()
+s.wanted = level
+s.mu.Unlock()
+ctx.SetThinkingLevel(level)
+```
+
 ### UI bridge
 
 - `ui.notify(message, level)` - toast in the footer. `level` is `info | warn | error`.
@@ -248,10 +290,47 @@ Go callback strings use WTF-8 for unmatched units. Use `github.com/MichaelKinsy/
 
 - `exec(command, args, options)` - run a command with stdin/stdout/stderr piped back. Subject to permissions.
 - `configHome()` - pig's config root (`~/.pig` or `PIG_HOME`).
-- `cwd()` - working directory of the host session.
+- `cwd()` - working directory of the host session. The built-in tools (`read`, `write`, `edit`, `ls`, `find`, `grep`, `bash`) resolve relative paths against it, as Pi's resolve them against `ctx.cwd` and not `process.cwd()`.
 - `width()` - terminal columns visible to the host.
 - `model()` - current model identifier.
 - `toolCallID()` - only meaningful inside a tool handler.
+
+### Writing terminal control strings
+
+A Pi extension writes an OSC notification or a bell to `process.stdout`, the terminal Pi's TUI draws on. A PiG extension's stdout is its host wire, and a write to `/dev/tty` can land inside a frame, so it asks the host to write the string between TUI frames (D237):
+
+```go
+// Pi: process.stdout.write("\x1b]777;notify;Pi;Finished\x07")
+if err := ctx.WriteTerminal("\x1b]777;notify;Pi;Finished\x07"); err != nil {
+	// print, JSON or RPC mode, or data the host refused; nothing was written
+}
+```
+
+- Go `ctx.WriteTerminal(data)`; Rust and Python `write_terminal(data)`; Lisp `ctx-write-terminal`; Node `await ctx.ui.writeTerminal(data)`. The wire call is `ui.writeTerminal` with `{"data": string}`.
+- The host accepts only strings that neither print nor move the cursor: BEL, OSC strings ended by BEL or `ESC \` (no control bytes inside, no OSC 8 hyperlink), and tmux passthroughs (`ESC P tmux; ... ESC \`, inner ESC doubled) of those, at most 64 KiB. Anything else is refused whole, and the error names the offending byte.
+- The interactive UI writes the string on its owner loop, the path `ctx.Bell()` takes. The call returns once the write is queued.
+- Print, JSON and RPC mode write nothing and return an error that names the mode and what stdout carries there. `ctx.Bell()` is unchanged: it does nothing and returns no error there.
+
+### Shared environment with Node extensions and providers
+
+Pi's extensions and Node providers run in one process and share one `process.env`. In Pig each extension has its own process, so a native extension changes a value that Node extensions and Node providers read at request time through the host (D234):
+
+```go
+// Pi: process.env.PI_CURSOR_EXPOSE_BUILTIN_TOOLS = "1"
+if err := ctx.SetSharedEnv("PI_CURSOR_EXPOSE_BUILTIN_TOOLS", "1"); err != nil {
+	return err
+}
+// Pi: delete process.env.PI_CURSOR_EXPOSE_BUILTIN_TOOLS
+if err := ctx.UnsetSharedEnv("PI_CURSOR_EXPOSE_BUILTIN_TOOLS"); err != nil {
+	return err
+}
+```
+
+- Go `ctx.SetSharedEnv(key, value)` and `ctx.UnsetSharedEnv(key)`; Rust and Python `set_shared_env` and `unset_shared_env`; Lisp `ctx-set-shared-env` and `ctx-unset-shared-env`. The wire call is `env.setShared` with `{"key": string, "value": string | null}`; `null` deletes the key.
+- The call returns after the host has queued the change to every running Node realm, isolated or packed. The Node runtime applies it to `process.env` on receipt, so the next request handler in any Node realm, including a provider's `streamSimple`, reads the new value. Node code needs no change.
+- A Node realm that starts later inherits the values in its spawn environment. Unset deletes the key, including a value inherited from pig's own environment.
+- The environment of the pig process and of native extension processes does not change. `os.Getenv` in the calling extension still returns its own value. A Node extension's own `process.env` writes stay in its process.
+- The host rejects an empty key, a key that contains `=` or NUL, a value that contains NUL, and keys that start with `PIG_EXT_` or `PIG_HARNESS_` (case-insensitive). A rejected call changes nothing.
 
 ### Providers
 
@@ -282,6 +361,54 @@ message := ctx.ModelRegistry().CompleteContext(callCtx, model, request, nil)
 - Cancelling the context sends `cancelModelStream` for the stream. The host cancels the provider request, closes its HTTP connection, and the stream ends with the provider's aborted message (`stopReason` `"aborted"`), as Pi's providers end an aborted signal. A context that is already cancelled aborts the request as soon as it starts.
 - `Stream`, `StreamSimple` and `Complete` are unchanged and cannot be cancelled except through the handler's own request.
 - The cancelling context is independent of the `sdk.Context` that makes the call. Work that outlives a handler still calls through the `sdk.Context` from `OnLoaded`, and passes its own cancellable context, for example one derived from `context.Background()`.
+
+### Reading the launch and exiting with a status (Go)
+
+A Pi extension runs in Pi's process. It reads `process.argv` and `process.stdin.isTTY`, and it stops startup with `process.exit(code)`. A Go extension runs in its own process, so it asks the host (D236):
+
+```go
+ext.OnSessionStart(func(ctx sdk.Context, _ map[string]any) (any, error) {
+	launch, err := ctx.HostLaunch()
+	if err != nil {
+		return nil, err
+	}
+	// launch.Argv is process.argv.slice(2): ["--no-approve", "--models", "a,b", "-e", "./ext"]
+	if slices.Contains(launch.Argv, "--no-approve") && launch.StdinIsTTY {
+		// ...
+	}
+	if misconfigured {
+		return nil, ctx.ShutdownWithCode(1) // Pi: process.exit(1)
+	}
+	return nil, nil
+})
+```
+
+- `ctx.HostLaunch()` returns `Argv` (pig's arguments after the executable, in order and unchanged, including a secret passed as an argument, as Pi's `process.argv` does), `Mode` (`tui`, `rpc`, `json` or `print`, the value of `ctx.Mode()`), and `StdinIsTTY` and `StdoutIsTTY` (pig's stdin and stdout when it started). It returns nothing from the environment. `os.Args` in a Go extension is its own process's.
+- `ctx.ShutdownWithCode(code)` ends pig with exit status `code` (0 to 255). In interactive and RPC mode it behaves as `ctx.Shutdown()` with that status. In print and JSON mode, where `ctx.Shutdown()` does nothing, it aborts a run in progress, sends no further prompt and writes no result. Called in `session_start`, it stops before the command-line prompt is sent in every mode. `session_shutdown` handlers still run. Only a termination signal's status replaces `code`. It returns an error for a code outside 0 to 255.
+- Node extensions keep Pi's `process.argv`, `process.stdin.isTTY` and `process.stdout.isTTY`. The Rust, Python and Lisp SDKs do not have these calls yet.
+
+### Relaunching pig with other arguments
+
+A Pi extension restarts Pi with another extension set or model scope by spawning a new Pi with stdio `"inherit"` and exiting with the child's status. In PiG that spawn starts a second pig on the extension's pipes. The extension asks the host instead, and pig replaces its own process image (D238):
+
+```go
+// Pi: spawn(process.execPath, [...entry, "-e", aio, "--models", scope, ...rest], { stdio: "inherit", env: {...process.env, AIO_RECIPE_STAGE: "1"} })
+stage := "1"
+err := ctx.Relaunch(sdk.RelaunchOptions{
+	Args: []string{"-ne", "-e", aioPath, "--models", "provider/model-id"},
+	Env:  map[string]*string{"AIO_RECIPE_STAGE": &stage, "AIO_RECIPE_ORIGIN": nil},
+})
+if err != nil {
+	// pig cannot restart now; the runtime keeps running
+}
+```
+
+- Go `ctx.Relaunch(sdk.RelaunchOptions{Args, Env})`; Rust `ctx.relaunch(&args, &env)` (`BTreeMap<String, Option<String>>`); Python `ctx.relaunch(args, env)` (`None` removes); Lisp `(ctx-relaunch ctx args :env (obj ...))` (`:null` removes); Node `await ctx.relaunch({ args, env })` (`null` or `undefined` removes). The wire call is `relaunch` with `{"args": string[], "env": {name: string | null}}`.
+- `Args` is the complete argument list after the pig executable. Read the current one with `ctx.HostLaunch()` (Go) or `process.argv.slice(2)` (Node). `Env` changes pig's current environment for the relaunched process. `PIG_EXT_*` and `PIG_HARNESS_*` are refused.
+- When `Args` choose no session (`--session`, `--session-id`, `--continue`, `--resume`, `--fork`, `--no-session`) and the current session file exists, pig puts `--session <file>` first, so the relaunched runtime continues the same session. A session file that is not written yet (no assistant reply yet) is not carried.
+- A nil error means pig accepted. Pig then shuts down as for `ctx.Shutdown()`: interactive mode when idle, RPC mode at its shutdown check, and print and JSON mode abort a run in progress and write no result. A relaunch in `session_start` sends no command-line prompt. `session_shutdown` runs with reason `quit`. Pig then replaces its process image: the same PID, terminal and standard streams. The relaunched pig starts as `pig <args>` does. Guard against a loop with an environment marker.
+- The call returns an error, and the runtime keeps running, on Windows, after pig read piped stdin, in RPC mode once pig reads commands (relaunch in `session_start`), while pig shuts down, and when a relaunch is pending.
+- A termination signal, a crash, or a later non-zero `ShutdownWithCode` ends pig instead, without a relaunch.
 
 ## Unsupported / typed-error APIs
 

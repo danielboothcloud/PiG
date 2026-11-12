@@ -4631,6 +4631,11 @@ impl Context {
         let _ = self.call_wire("shutdown", None);
     }
 
+    /// End the current runtime and restart pig in the same process, terminal and standard streams with `args` (the complete argument list after the pig executable) and pig's environment changed by `env`: `Some(value)` sets a variable and `None` removes it; `PIG_EXT_*` and `PIG_HARNESS_*` belong to the host and are refused. A Pi extension does this by spawning a new Pi with stdio `inherit` and exiting with its status. When `args` choose no session (`--session`, `--session-id`, `--continue`, `--resume`, `--fork`, `--no-session`), pig adds `--session` with the current session file if that file exists. `Ok` means the host accepted: pig then shuts down as for `shutdown` (`session_shutdown` reason `quit`) and replaces its process image. The error says why pig cannot restart now, and the runtime keeps running: on Windows, after pig read piped stdin, in RPC mode once pig reads commands, while pig shuts down, and when a relaunch is pending. pig divergence (D238).
+    pub fn relaunch(&self, args: &[String], env: &std::collections::BTreeMap<String, Option<String>>) -> io::Result<()> {
+        call_result_to_io(self.call_wire("relaunch", Some(serde_json::json!({ "args": args, "env": env })))?)
+    }
+
     pub fn compact(&self, opts: serde_json::Value) {
         let _ = self.call_wire("compact", Some(opts));
     }
